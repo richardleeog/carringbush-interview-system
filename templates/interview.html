@@ -33,6 +33,9 @@
                     <button id="stop-btn" class="btn btn-large btn-danger recording-btn" disabled style="display: none;">
                         &#9632; Stop Recording
                     </button>
+                    <button id="demo-btn" class="btn btn-large recording-btn" style="background-color: #8E44AD; color: white;">
+                        &#9654; Run Demo
+                    </button>
                 </div>
 
                 <div id="recording-timer" class="recording-timer">00:00</div>
@@ -150,13 +153,14 @@
 {% block scripts %}
 <script>
     // =========================================================================
-    // Interview Recording & Transcription System
+    // Interview Recording & Transcription System (with Demo Mode)
     // =========================================================================
 
-    const studentId = '{{ student.student_id }}';
+    const studentId = {{ student.id }};
     const studentLanguage = '{{ student.preferred_language }}';
     const startBtn = document.getElementById('start-btn');
     const stopBtn = document.getElementById('stop-btn');
+    const demoBtn = document.getElementById('demo-btn');
     const endInterviewBtn = document.getElementById('end-interview-btn');
     const recordingDot = document.getElementById('recording-dot');
     const recordingLabel = document.getElementById('recording-label');
@@ -169,86 +173,231 @@
     let mediaRecorder = null;
     let audioChunks = [];
     let isRecording = false;
+    let isDemoRunning = false;
     let sessionId = null;
     let recordingStartTime = null;
     let timerInterval = null;
     let currentTranscript = [];
 
     // =========================================================================
-    // Recording Setup
+    // Demo Mode — Sample Interview Data
     // =========================================================================
 
-    async function startRecording() {
+    const DEMO_CONVERSATION = [
+        {
+            original: "Xin chao. Ten toi la Thanh Nguyen.",
+            english: "Hello. My name is Thanh Nguyen.",
+            pause: 2000
+        },
+        {
+            original: "Toi da song o Melbourne duoc ba nam roi.",
+            english: "I have been living in Melbourne for three years now.",
+            pause: 2500
+        },
+        {
+            original: "O Viet Nam, toi da lam bep trong nha hang duoc nam nam.",
+            english: "In Vietnam, I worked as a cook in a restaurant for five years.",
+            pause: 3000
+        },
+        {
+            original: "Toi co the nau cac mon An, Viet Nam, Thai va Trung Quoc.",
+            english: "I can cook Vietnamese, Thai, Chinese and Western dishes.",
+            pause: 2500
+        },
+        {
+            original: "Toi cung da lam phuc vu ban o mot quan ca phe o Richmond.",
+            english: "I have also worked as a waiter at a cafe in Richmond.",
+            pause: 2500
+        },
+        {
+            original: "Toi co chung chi ve sinh an toan thuc pham.",
+            english: "I have a food safety and hygiene certificate.",
+            pause: 2000
+        },
+        {
+            original: "Toi muon tim viec lam trong bep hoac nha hang.",
+            english: "I would like to find work in a kitchen or restaurant.",
+            pause: 2500
+        },
+        {
+            original: "Toi co the lam viec buoi sang, buoi chieu va cuoi tuan.",
+            english: "I can work mornings, afternoons and weekends.",
+            pause: 2000
+        },
+        {
+            original: "Toi di lam bang xe buyt va xe lua.",
+            english: "I travel to work by bus and train.",
+            pause: 2000
+        },
+        {
+            original: "Toi cham chi va luon dung gio. Toi thich lam viec nhom.",
+            english: "I am hardworking and always on time. I enjoy working in a team.",
+            pause: 2500
+        },
+        {
+            original: "Toi da hoc tieng Anh o AMES Australia duoc mot nam.",
+            english: "I have been studying English at AMES Australia for one year.",
+            pause: 2500
+        },
+        {
+            original: "Muc tieu cua toi la tro thanh bep truong trong tuong lai.",
+            english: "My goal is to become a head chef in the future.",
+            pause: 2500
+        }
+    ];
+
+    // =========================================================================
+    // Demo Mode — Run Simulated Interview
+    // =========================================================================
+
+    async function runDemo() {
+        // Start a real session on the server
         try {
-            // Request microphone access
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-
-            // Start session
             const response = await fetch(`/interview/${studentId}/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
-
             const data = await response.json();
             if (!data.success) throw new Error(data.error);
+            sessionId = data.session_id;
+        } catch (error) {
+            console.error('Error starting demo session:', error);
+            alert('Could not start demo session. Please try again.');
+            return;
+        }
 
+        // Update UI
+        isDemoRunning = true;
+        recordingStartTime = Date.now();
+        recordingDot.classList.add('recording');
+        recordingLabel.textContent = 'Demo in progress...';
+        recordingLabel.style.color = '#8E44AD';
+        startBtn.style.display = 'none';
+        demoBtn.style.display = 'none';
+        endInterviewBtn.disabled = false;
+        startTimer();
+
+        const originalView = document.getElementById('transcript-original');
+        const translationView = document.getElementById('transcript-translation');
+        originalView.innerHTML = '';
+        translationView.innerHTML = '';
+
+        // Play through demo conversation with realistic delays
+        for (let i = 0; i < DEMO_CONVERSATION.length; i++) {
+            if (!isDemoRunning) break;
+
+            const entry = DEMO_CONVERSATION[i];
+
+            // Show "listening" indicator
+            recordingLabel.textContent = 'Listening...';
+
+            await sleep(entry.pause);
+            if (!isDemoRunning) break;
+
+            // Show original text (simulating transcription appearing)
+            recordingLabel.textContent = 'Transcribing...';
+            const origP = document.createElement('p');
+            origP.style.opacity = '0';
+            origP.style.transition = 'opacity 0.5s';
+            origP.textContent = entry.original;
+            originalView.appendChild(origP);
+            originalView.scrollTop = originalView.scrollHeight;
+            requestAnimationFrame(() => { origP.style.opacity = '1'; });
+
+            await sleep(800);
+            if (!isDemoRunning) break;
+
+            // Show translation
+            recordingLabel.textContent = 'Translating...';
+            const transP = document.createElement('p');
+            transP.style.opacity = '0';
+            transP.style.transition = 'opacity 0.5s';
+            transP.textContent = entry.english;
+            translationView.appendChild(transP);
+            translationView.scrollTop = translationView.scrollHeight;
+            requestAnimationFrame(() => { transP.style.opacity = '1'; });
+
+            // Store in transcript
+            currentTranscript.push({
+                original: entry.original,
+                english: entry.english,
+                timestamp: new Date().toISOString(),
+                sensitive: false
+            });
+
+            recordingLabel.textContent = 'Demo in progress...';
+        }
+
+        // Demo finished
+        if (isDemoRunning) {
+            recordingDot.classList.remove('recording');
+            recordingLabel.textContent = 'Demo complete — click "End Interview" to generate documents';
+            recordingLabel.style.color = '#27AE60';
+            if (timerInterval) clearInterval(timerInterval);
+        }
+    }
+
+    // =========================================================================
+    // Recording Setup (real microphone mode)
+    // =========================================================================
+
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            const response = await fetch(`/interview/${studentId}/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
             sessionId = data.session_id;
 
-            // Collect audio chunks
             mediaRecorder.ondataavailable = (event) => {
                 audioChunks.push(event.data);
                 uploadAudioChunk();
             };
 
-            mediaRecorder.start(500); // Collect data every 500ms
+            mediaRecorder.start(500);
 
-            // Update UI
             isRecording = true;
             recordingStartTime = Date.now();
             recordingDot.classList.add('recording');
             recordingLabel.textContent = 'Recording...';
             startBtn.style.display = 'none';
+            demoBtn.style.display = 'none';
             stopBtn.style.display = 'block';
             stopBtn.disabled = false;
             endInterviewBtn.disabled = false;
-
-            // Start timer
             startTimer();
 
         } catch (error) {
             console.error('Error starting recording:', error);
-            alert('Could not access microphone. Please check permissions.');
+            alert('Could not access microphone. Please check permissions, or use the "Run Demo" button to see a simulated interview.');
         }
     }
 
     function stopRecording() {
         if (mediaRecorder && isRecording) {
             mediaRecorder.stop();
-
-            // Stop tracks
             mediaRecorder.stream.getTracks().forEach(track => track.stop());
-
-            // Update UI
             isRecording = false;
             recordingDot.classList.remove('recording');
             recordingLabel.textContent = 'Recording paused';
             startBtn.style.display = 'block';
             stopBtn.style.display = 'none';
-
             if (timerInterval) clearInterval(timerInterval);
         }
     }
 
     // =========================================================================
-    // Audio Upload & Transcription
+    // Audio Upload & Transcription (real mode)
     // =========================================================================
 
     async function uploadAudioChunk() {
         if (audioChunks.length === 0) return;
-
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         const formData = new FormData();
         formData.append('audio', audioBlob);
@@ -256,16 +405,11 @@
 
         try {
             const response = await fetch(`/interview/${studentId}/upload-audio`, {
-                method: 'POST',
-                body: formData
+                method: 'POST', body: formData
             });
-
             const data = await response.json();
             if (!data.success) throw new Error(data.error);
-
-            // Transcribe the uploaded chunk
             transcribeAudio(data.filename);
-
         } catch (error) {
             console.error('Error uploading audio:', error);
         }
@@ -276,50 +420,28 @@
             const response = await fetch(`/interview/${studentId}/transcribe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    audio_path: audioPath,
-                    session_id: sessionId
-                })
+                body: JSON.stringify({ audio_path: audioPath, session_id: sessionId })
             });
-
             const data = await response.json();
             if (!data.success) throw new Error(data.error);
-
-            // Update transcript display
             updateTranscriptDisplay(data.transcript);
-
-            // Translate to English
-            if (studentLanguage !== 'en') {
-                translateTranscript(data.transcript);
-            }
-
+            if (studentLanguage !== 'en') { translateTranscript(data.transcript); }
         } catch (error) {
             console.error('Error transcribing audio:', error);
         }
     }
-
-    // =========================================================================
-    // Translation
-    // =========================================================================
 
     async function translateTranscript(text) {
         try {
             const response = await fetch('/api/translate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text: text,
-                    source_language: studentLanguage,
-                    target_language: 'en'
-                })
+                body: JSON.stringify({ text, source_language: studentLanguage, target_language: 'en' })
             });
-
             const data = await response.json();
             if (!data.success) throw new Error(data.error);
-
             document.getElementById('transcript-translation').innerHTML +=
                 `<p>${escapeHtml(data.translated_text)}</p>`;
-
         } catch (error) {
             console.error('Error translating text:', error);
         }
@@ -331,29 +453,18 @@
 
     function updateTranscriptDisplay(transcript) {
         const originalView = document.getElementById('transcript-original');
-
-        // Clear initial message
-        if (originalView.textContent.includes('will appear here')) {
-            originalView.innerHTML = '';
-        }
-
+        if (originalView.textContent.includes('will appear here')) { originalView.innerHTML = ''; }
         originalView.innerHTML += `<p>${escapeHtml(transcript)}</p>`;
-
-        // Store in current transcript
         currentTranscript.push({
-            text: transcript,
-            language: studentLanguage,
-            timestamp: new Date().toISOString(),
-            sensitive: false
+            original: transcript, english: transcript,
+            timestamp: new Date().toISOString(), sensitive: false
         });
     }
 
     function clearTranscript() {
         if (confirm('Are you sure you want to clear the transcript? This cannot be undone.')) {
-            document.getElementById('transcript-original').innerHTML =
-                'Transcript will appear here as you speak...';
-            document.getElementById('transcript-translation').innerHTML =
-                'Translation will appear here...';
+            document.getElementById('transcript-original').innerHTML = 'Transcript will appear here as you speak...';
+            document.getElementById('transcript-translation').innerHTML = 'Translation will appear here...';
             currentTranscript = [];
         }
     }
@@ -370,11 +481,11 @@
     // =========================================================================
 
     async function endInterview() {
-        if (!confirm('Are you sure you want to end this interview? The transcript will be saved.')) {
-            return;
-        }
+        if (!confirm('End this interview and generate documents?')) { return; }
 
-        stopRecording();
+        if (isRecording) { stopRecording(); }
+        isDemoRunning = false;
+        if (timerInterval) clearInterval(timerInterval);
 
         try {
             const response = await fetch(`/interview/${studentId}/save-transcript`, {
@@ -382,19 +493,27 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     session_id: sessionId,
-                    transcript_data: {
-                        entries: currentTranscript,
-                        language: studentLanguage,
-                        duration: Math.floor((Date.now() - recordingStartTime) / 1000),
-                        completed_at: new Date().toISOString()
-                    }
+                    transcript: currentTranscript,
+                    work_experience: [
+                        { title: "Cook", employer: "Saigon Kitchen, Ho Chi Minh City", duration: "5 years" },
+                        { title: "Waiter", employer: "Richmond Cafe, Melbourne", duration: "1 year" }
+                    ],
+                    skills: ["Vietnamese cooking", "Thai cooking", "Chinese cooking", "Western dishes",
+                             "Food preparation", "Customer service", "Teamwork"],
+                    education: [
+                        { institution: "AMES Australia", qualification: "English Language Program", year: "2024-present" }
+                    ],
+                    certificates: ["Food Safety and Hygiene Certificate"],
+                    job_preferences: { roles: "Kitchen hand, Cook, Restaurant worker", industry: "Hospitality" },
+                    availability: { mornings: true, afternoons: true, evenings: false, weekends: true },
+                    transport: "Bus and train",
+                    additional_info: "Goal: become a head chef. Hardworking, punctual, team player."
                 })
             });
 
             const data = await response.json();
             if (!data.success) throw new Error(data.error);
 
-            // Redirect to document generation
             window.location.href = `/interview/${studentId}/generate-documents`;
 
         } catch (error) {
@@ -404,7 +523,7 @@
     }
 
     // =========================================================================
-    // Timer
+    // Timer & Utilities
     // =========================================================================
 
     function startTimer() {
@@ -417,29 +536,7 @@
         }, 100);
     }
 
-    // =========================================================================
-    // Event Listeners
-    // =========================================================================
-
-    startBtn.addEventListener('click', startRecording);
-    stopBtn.addEventListener('click', stopRecording);
-    endInterviewBtn.addEventListener('click', endInterview);
-    clearTranscriptBtn.addEventListener('click', clearTranscript);
-    markSensitiveBtn.addEventListener('click', markCurrentSensitive);
-
-    toggleGuideBtn.addEventListener('click', () => {
-        if (guideContent.style.display === 'none') {
-            guideContent.style.display = 'block';
-            toggleGuideBtn.textContent = '▼ Interview Guide';
-        } else {
-            guideContent.style.display = 'none';
-            toggleGuideBtn.textContent = '▶ Interview Guide';
-        }
-    });
-
-    // =========================================================================
-    // Utility Functions
-    // =========================================================================
+    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -447,11 +544,31 @@
         return div.innerHTML;
     }
 
-    // Cleanup on page unload
+    // =========================================================================
+    // Event Listeners
+    // =========================================================================
+
+    startBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+    demoBtn.addEventListener('click', runDemo);
+    endInterviewBtn.addEventListener('click', endInterview);
+    clearTranscriptBtn.addEventListener('click', clearTranscript);
+    markSensitiveBtn.addEventListener('click', markCurrentSensitive);
+
+    toggleGuideBtn.addEventListener('click', () => {
+        if (guideContent.style.display === 'none') {
+            guideContent.style.display = 'block';
+            toggleGuideBtn.textContent = '\u25BC Interview Guide';
+        } else {
+            guideContent.style.display = 'none';
+            toggleGuideBtn.textContent = '\u25B6 Interview Guide';
+        }
+    });
+
     window.addEventListener('beforeunload', (e) => {
-        if (isRecording) {
+        if (isRecording || isDemoRunning) {
             e.preventDefault();
-            e.returnValue = 'Recording in progress. Are you sure you want to leave?';
+            e.returnValue = 'Interview in progress. Are you sure you want to leave?';
         }
     });
 </script>
