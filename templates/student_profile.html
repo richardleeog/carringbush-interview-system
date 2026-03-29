@@ -54,7 +54,7 @@
             {% endif %}
 
             <div class="info-actions">
-                <a href="{{ url_for('interview', student_id=student.student_id) }}" class="btn btn-primary btn-large">
+                <a href="{{ url_for('interview', student_id=student.id) }}" class="btn btn-primary btn-large">
                     + Start New Interview
                 </a>
             </div>
@@ -115,7 +115,7 @@
         {% else %}
             <div class="empty-state">
                 <p>No interview sessions yet.</p>
-                <a href="{{ url_for('interview', student_id=student.student_id) }}" class="btn btn-primary">Start First Interview</a>
+                <a href="{{ url_for('interview', student_id=student.id) }}" class="btn btn-primary">Start First Interview</a>
             </div>
         {% endif %}
     </section>

@@ -68,8 +68,8 @@
                                     {% endif %}
                                 </td>
                                 <td class="actions-cell">
-                                    <a href="{{ url_for('student_profile', student_id=student.student_id) }}" class="btn btn-small btn-secondary">View</a>
-                                    <a href="{{ url_for('interview', student_id=student.student_id) }}" class="btn btn-small btn-primary">New Interview</a>
+                                    <a href="{{ url_for('student_profile', student_id=student.id) }}" class="btn btn-small btn-secondary">View</a>
+                                    <a href="{{ url_for('interview', student_id=student.id) }}" class="btn btn-small btn-primary">New Interview</a>
                                 </td>
                             </tr>
                         {% endfor %}
