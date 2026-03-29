@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Students - Multilingual Interview System{% endblock %}
+
+{% block content %}
+<div class="students-container">
+    <h1 class="page-title">All Students</h1>
+
+    <!-- Search Bar -->
+    <div class="search-section">
+        <form method="GET" action="{{ url_for('students_list') }}" class="search-form">
+            <input
+                type="text"
+                name="q"
+                class="search-input"
+                placeholder="Search by name, ID, or language..."
+                value="{{ search_query }}"
+            >
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+        {% if search_query %}
+            <a href="{{ url_for('students_list') }}" class="btn btn-secondary">Clear</a>
+        {% endif %}
+    </div>
+
+    <!-- Results -->
+    {% if students.items %}
+        <div class="results-info">
+            <p>Found {{ students.total }} student{{ 's' if students.total != 1 else '' }}</p>
+        </div>
+
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Student ID</th>
+                        <th>Name</th>
+                        <th>Language</th>
+                        <th>Contact</th>
+                        <th>Sessions</th>
+                        <th>Last Visit</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students.items %}
+                        <tr>
+                            <td class="student-id">{{ student.student_id }}</td>
+                            <td class="student-name">
+                                <strong>{{ student.first_name }} {{ student.surname }}</strong>
+                                {% if student.suburb %}
+                                    <div class="student-location">{{ student.suburb }}, VIC {{ student.postcode }}</div>
+                                {% endif %}
+                            </td>
+                            <td>{{ student.preferred_language }}</td>
+                            <td>
+                                {% if student.email %}
+                                    <a href="mailto:{{ student.email }}" class="email-link">{{ student.email }}</a>
+                                {% endif %}
+                                {% if student.phone %}
+                                    <div>{{ student.phone }}</div>
+                                {% endif %}
+                            </td>
+                            <td class="center">{{ student.interview_sessions|length }}</td>
+                            <td>
+                                {% if student.interview_sessions %}
+                                    {{ student.interview_sessions[0].created_at.strftime('%d %b %Y') }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="actions-cell">
+                                <a href="{{ url_for('student_profile', student_id=student.student_id) }}" class="btn btn-small btn-secondary">View Profile</a>
+                                <a href="{{ url_for('interview', student_id=student.student_id) }}" class="btn btn-small btn-primary">Interview</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if students.pages > 1 %}
+            <div class="pagination">
+                {% if students.has_prev %}
+                    <a href="{{ url_for('students_list', q=search_query, page=students.prev_num) }}" class="btn btn-secondary btn-small">Previous</a>
+                {% endif %}
+
+                <span class="pagination-info">
+                    Page {{ students.page }} of {{ students.pages }}
+                </span>
+
+                {% if students.has_next %}
+                    <a href="{{ url_for('students_list', q=search_query, page=students.next_num) }}" class="btn btn-secondary btn-small">Next</a>
+                {% endif %}
+            </div>
+        {% endif %}
+
+    {% else %}
+        <div class="empty-state">
+            {% if search_query %}
+                <p>No students found matching "{{ search_query }}"</p>
+                <a href="{{ url_for('students_list') }}" class="btn btn-secondary">View all students</a>
+            {% else %}
+                <p>No students registered yet.</p>
+                <a href="{{ url_for('student_new_form') }}" class="btn btn-primary">Register a new student</a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

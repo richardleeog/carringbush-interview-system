@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+
+{% block title %}Interview - {{ student.first_name }} {{ student.surname }} - Multilingual Interview System{% endblock %}
+
+{% block content %}
+<div class="interview-container">
+    <!-- Student Info Header -->
+    <div class="interview-header">
+        <div class="student-info">
+            <h1>{{ student.first_name }} {{ student.surname }}</h1>
+            <div class="header-meta">
+                <span class="meta-item">ID: {{ student.student_id }}</span>
+                <span class="meta-item">Language: {{ student.preferred_language }}</span>
+                <span class="meta-item">English Level: {{ student.english_level }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="interview-layout">
+        <!-- Main Interview Area -->
+        <main class="interview-main">
+            <!-- Recording Controls -->
+            <section class="recording-section">
+                <div class="recording-indicator">
+                    <div class="recording-dot" id="recording-dot"></div>
+                    <span class="recording-label" id="recording-label">Not recording</span>
+                </div>
+
+                <div class="recording-controls">
+                    <button id="start-btn" class="btn btn-large btn-success recording-btn">
+                        &#9679; Start Recording
+                    </button>
+                    <button id="stop-btn" class="btn btn-large btn-danger recording-btn" disabled style="display: none;">
+                        &#9632; Stop Recording
+                    </button>
+                </div>
+
+                <div id="recording-timer" class="recording-timer">00:00</div>
+            </section>
+
+            <!-- Transcript Display -->
+            <section class="transcript-section">
+                <div class="transcript-header">
+                    <h2>Live Transcript</h2>
+                </div>
+
+                <div class="transcript-container">
+                    <!-- Original Language View -->
+                    <div class="transcript-view original-view">
+                        <div class="transcript-label">{{ student.preferred_language }}</div>
+                        <div id="transcript-original" class="transcript-text">
+                            Transcript will appear here as you speak...
+                        </div>
+                    </div>
+
+                    <!-- Translation View -->
+                    <div class="transcript-view translation-view">
+                        <div class="transcript-label">English (Translation)</div>
+                        <div id="transcript-translation" class="transcript-text">
+                            Translation will appear here...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transcript Controls -->
+                <div class="transcript-controls">
+                    <button id="mark-sensitive-btn" class="btn btn-secondary" title="Mark current section as sensitive">
+                        🔒 Mark as Sensitive
+                    </button>
+                    <button id="clear-transcript-btn" class="btn btn-secondary" title="Clear transcript and start over">
+                        🗑 Clear Transcript
+                    </button>
+                </div>
+            </section>
+
+            <!-- End Interview -->
+            <section class="interview-actions">
+                <button id="end-interview-btn" class="btn btn-large btn-primary" disabled>
+                    End Interview & Generate Documents
+                </button>
+                <a href="{{ url_for('student_profile', student_id=student.student_id) }}" class="btn btn-large btn-secondary">
+                    Cancel
+                </a>
+            </section>
+        </main>
+
+        <!-- Sidebar - Interview Guide -->
+        <aside class="interview-sidebar">
+            <div class="guide-container">
+                <button id="toggle-guide" class="btn btn-secondary btn-small" style="width: 100%; margin-bottom: 1rem;">
+                    ▼ Interview Guide
+                </button>
+
+                <div id="guide-content" class="guide-content" style="display: block;">
+                    <h3>Suggested Topics</h3>
+
+                    <div class="guide-topics">
+                        <div class="guide-topic">
+                            <h4>Work Experience</h4>
+                            <ul>
+                                <li>Tell me about your previous jobs</li>
+                                <li>What were your key responsibilities?</li>
+                                <li>What did you achieve in those roles?</li>
+                            </ul>
+                        </div>
+
+                        <div class="guide-topic">
+                            <h4>Skills & Abilities</h4>
+                            <ul>
+                                <li>What technical skills do you have?</li>
+                                <li>What soft skills are you strong in?</li>
+                                <li>Any certifications or qualifications?</li>
+                            </ul>
+                        </div>
+
+                        <div class="guide-topic">
+                            <h4>Education</h4>
+                            <ul>
+                                <li>What is your highest qualification?</li>
+                                <li>Where did you study?</li>
+                                <li>Any relevant courses or training?</li>
+                            </ul>
+                        </div>
+
+                        <div class="guide-topic">
+                            <h4>Career Goals</h4>
+                            <ul>
+                                <li>What type of role are you seeking?</li>
+                                <li>Where do you see yourself in 5 years?</li>
+                                <li>What motivates you professionally?</li>
+                            </ul>
+                        </div>
+
+                        <div class="guide-topic">
+                            <h4>Strengths</h4>
+                            <ul>
+                                <li>What are your greatest strengths?</li>
+                                <li>Tell me about a time you overcame a challenge</li>
+                                <li>What are you most proud of?</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // =========================================================================
+    // Interview Recording & Transcription System
+    // =========================================================================
+
+    const studentId = '{{ student.student_id }}';
+    const studentLanguage = '{{ student.preferred_language }}';
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const endInterviewBtn = document.getElementById('end-interview-btn');
+    const recordingDot = document.getElementById('recording-dot');
+    const recordingLabel = document.getElementById('recording-label');
+    const recordingTimer = document.getElementById('recording-timer');
+    const toggleGuideBtn = document.getElementById('toggle-guide');
+    const guideContent = document.getElementById('guide-content');
+    const clearTranscriptBtn = document.getElementById('clear-transcript-btn');
+    const markSensitiveBtn = document.getElementById('mark-sensitive-btn');
+
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let sessionId = null;
+    let recordingStartTime = null;
+    let timerInterval = null;
+    let currentTranscript = [];
+
+    // =========================================================================
+    // Recording Setup
+    // =========================================================================
+
+    async function startRecording() {
+        try {
+            // Request microphone access
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            // Start session
+            const response = await fetch(`/interview/${studentId}/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
+
+            sessionId = data.session_id;
+
+            // Collect audio chunks
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+                uploadAudioChunk();
+            };
+
+            mediaRecorder.start(500); // Collect data every 500ms
+
+            // Update UI
+            isRecording = true;
+            recordingStartTime = Date.now();
+            recordingDot.classList.add('recording');
+            recordingLabel.textContent = 'Recording...';
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'block';
+            stopBtn.disabled = false;
+            endInterviewBtn.disabled = false;
+
+            // Start timer
+            startTimer();
+
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            alert('Could not access microphone. Please check permissions.');
+        }
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+
+            // Stop tracks
+            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+
+            // Update UI
+            isRecording = false;
+            recordingDot.classList.remove('recording');
+            recordingLabel.textContent = 'Recording paused';
+            startBtn.style.display = 'block';
+            stopBtn.style.display = 'none';
+
+            if (timerInterval) clearInterval(timerInterval);
+        }
+    }
+
+    // =========================================================================
+    // Audio Upload & Transcription
+    // =========================================================================
+
+    async function uploadAudioChunk() {
+        if (audioChunks.length === 0) return;
+
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob);
+        formData.append('session_id', sessionId);
+
+        try {
+            const response = await fetch(`/interview/${studentId}/upload-audio`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
+
+            // Transcribe the uploaded chunk
+            transcribeAudio(data.filename);
+
+        } catch (error) {
+            console.error('Error uploading audio:', error);
+        }
+    }
+
+    async function transcribeAudio(audioPath) {
+        try {
+            const response = await fetch(`/interview/${studentId}/transcribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    audio_path: audioPath,
+                    session_id: sessionId
+                })
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
+
+            // Update transcript display
+            updateTranscriptDisplay(data.transcript);
+
+            // Translate to English
+            if (studentLanguage !== 'en') {
+                translateTranscript(data.transcript);
+            }
+
+        } catch (error) {
+            console.error('Error transcribing audio:', error);
+        }
+    }
+
+    // =========================================================================
+    // Translation
+    // =========================================================================
+
+    async function translateTranscript(text) {
+        try {
+            const response = await fetch('/api/translate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    source_language: studentLanguage,
+                    target_language: 'en'
+                })
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
+
+            document.getElementById('transcript-translation').innerHTML +=
+                `<p>${escapeHtml(data.translated_text)}</p>`;
+
+        } catch (error) {
+            console.error('Error translating text:', error);
+        }
+    }
+
+    // =========================================================================
+    // Transcript Display
+    // =========================================================================
+
+    function updateTranscriptDisplay(transcript) {
+        const originalView = document.getElementById('transcript-original');
+
+        // Clear initial message
+        if (originalView.textContent.includes('will appear here')) {
+            originalView.innerHTML = '';
+        }
+
+        originalView.innerHTML += `<p>${escapeHtml(transcript)}</p>`;
+
+        // Store in current transcript
+        currentTranscript.push({
+            text: transcript,
+            language: studentLanguage,
+            timestamp: new Date().toISOString(),
+            sensitive: false
+        });
+    }
+
+    function clearTranscript() {
+        if (confirm('Are you sure you want to clear the transcript? This cannot be undone.')) {
+            document.getElementById('transcript-original').innerHTML =
+                'Transcript will appear here as you speak...';
+            document.getElementById('transcript-translation').innerHTML =
+                'Translation will appear here...';
+            currentTranscript = [];
+        }
+    }
+
+    function markCurrentSensitive() {
+        if (currentTranscript.length > 0) {
+            currentTranscript[currentTranscript.length - 1].sensitive = true;
+            alert('Section marked as sensitive.');
+        }
+    }
+
+    // =========================================================================
+    // End Interview & Save
+    // =========================================================================
+
+    async function endInterview() {
+        if (!confirm('Are you sure you want to end this interview? The transcript will be saved.')) {
+            return;
+        }
+
+        stopRecording();
+
+        try {
+            const response = await fetch(`/interview/${studentId}/save-transcript`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    transcript_data: {
+                        entries: currentTranscript,
+                        language: studentLanguage,
+                        duration: Math.floor((Date.now() - recordingStartTime) / 1000),
+                        completed_at: new Date().toISOString()
+                    }
+                })
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
+
+            // Redirect to document generation
+            window.location.href = `/interview/${studentId}/generate-documents`;
+
+        } catch (error) {
+            console.error('Error saving transcript:', error);
+            alert('Error saving interview. Please try again.');
+        }
+    }
+
+    // =========================================================================
+    // Timer
+    // =========================================================================
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            recordingTimer.textContent =
+                `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }, 100);
+    }
+
+    // =========================================================================
+    // Event Listeners
+    // =========================================================================
+
+    startBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+    endInterviewBtn.addEventListener('click', endInterview);
+    clearTranscriptBtn.addEventListener('click', clearTranscript);
+    markSensitiveBtn.addEventListener('click', markCurrentSensitive);
+
+    toggleGuideBtn.addEventListener('click', () => {
+        if (guideContent.style.display === 'none') {
+            guideContent.style.display = 'block';
+            toggleGuideBtn.textContent = '▼ Interview Guide';
+        } else {
+            guideContent.style.display = 'none';
+            toggleGuideBtn.textContent = '▶ Interview Guide';
+        }
+    });
+
+    // =========================================================================
+    // Utility Functions
+    // =========================================================================
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', (e) => {
+        if (isRecording) {
+            e.preventDefault();
+            e.returnValue = 'Recording in progress. Are you sure you want to leave?';
+        }
+    });
+</script>
+{% endblock %}

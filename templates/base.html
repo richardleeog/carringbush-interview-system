@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Multilingual Interview System{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="container-wrapper">
+        <!-- Navigation Bar -->
+        <nav class="navbar">
+            <div class="navbar-container">
+                <div class="navbar-logo">
+                    <a href="{{ url_for('dashboard') }}">
+                        <span class="logo-text">Multilingual Interview System</span>
+                    </a>
+                </div>
+                <ul class="navbar-nav">
+                    <li><a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a></li>
+                    <li><a href="{{ url_for('students_list') }}" class="nav-link">Students</a></li>
+                    <li><a href="{{ url_for('student_new_form') }}" class="nav-link">New Student</a></li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">
+                            <div class="flash-content">
+                                <p>{{ message }}</p>
+                                <button class="flash-close" onclick="this.parentElement.parentElement.style.display='none';">&times;</button>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Page Content -->
+            {% block content %}{% endblock %}
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p>&copy; 2026 Multilingual Interview System. All rights reserved.</p>
+                <p class="footer-subtitle">Helping job seekers create professional CVs through recorded interviews.</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Auto-hide flash messages after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const flashMessages = document.querySelectorAll('.flash');
+            flashMessages.forEach(function(msg) {
+                setTimeout(function() {
+                    msg.style.opacity = '0';
+                    setTimeout(function() {
+                        msg.style.display = 'none';
+                    }, 300);
+                }, 5000);
+            });
+        });
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

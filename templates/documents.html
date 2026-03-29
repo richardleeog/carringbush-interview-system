@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+
+{% block title %}Generate Documents - {{ student.first_name }} {{ student.surname }} - Multilingual Interview System{% endblock %}
+
+{% block content %}
+<div class="documents-container">
+    <h1 class="page-title">Generate Documents</h1>
+    <p class="page-subtitle">For {{ student.first_name }} {{ student.surname }}</p>
+
+    <!-- Transcript Summary -->
+    <section class="transcript-summary-section">
+        <h2 class="section-title">Transcript Summary</h2>
+        <div class="summary-card">
+            <p>
+                <strong>Session Date:</strong> {{ session.created_at.strftime('%d %B %Y at %H:%M') }}
+            </p>
+            {% if session.duration_minutes %}
+                <p>
+                    <strong>Duration:</strong> {{ session.duration_minutes }} minutes
+                </p>
+            {% endif %}
+            <p>
+                <strong>Language:</strong> {{ student.preferred_language|lang_name }}
+            </p>
+            {% if session.transcript_english %}
+                <p>
+                    <strong>Transcript:</strong> ✓ Available
+                </p>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Document Selection -->
+    <section class="document-selection-section">
+        <h2 class="section-title">Select Documents to Generate</h2>
+
+        <form id="document-form" class="document-form">
+            <!-- CV -->
+            <div class="document-option">
+                <div class="checkbox-wrapper">
+                    <input
+                        type="checkbox"
+                        id="cv-check"
+                        name="documents"
+                        value="cv"
+                        checked
+                    >
+                    <label for="cv-check">
+                        <span class="checkbox-label-title">Curriculum Vitae (CV)</span>
+                        <span class="checkbox-label-desc">Professional CV with work history, skills, and education</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Cover Letter -->
+            <div class="document-option">
+                <div class="checkbox-wrapper">
+                    <input
+                        type="checkbox"
+                        id="cover-letter-check"
+                        name="documents"
+                        value="cover_letter"
+                    >
+                    <label for="cover-letter-check">
+                        <span class="checkbox-label-title">Cover Letter</span>
+                        <span class="checkbox-label-desc">Tailored cover letter for a specific position</span>
+                    </label>
+                </div>
+
+                <div class="optional-fields" id="cover-letter-fields" style="display: none;">
+                    <div class="form-group">
+                        <label for="job-title">Job Title (Optional)</label>
+                        <input
+                            type="text"
+                            id="job-title"
+                            name="job_title"
+                            class="form-input"
+                            placeholder="e.g., Marketing Manager"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="employer">Employer/Company (Optional)</label>
+                        <input
+                            type="text"
+                            id="employer"
+                            name="employer"
+                            class="form-input"
+                            placeholder="e.g., Acme Corporation"
+                        >
+                    </div>
+                </div>
+            </div>
+
+            <!-- Internal Summary -->
+            <div class="document-option">
+                <div class="checkbox-wrapper">
+                    <input
+                        type="checkbox"
+                        id="summary-internal-check"
+                        name="documents"
+                        value="summary_internal"
+                    >
+                    <label for="summary-internal-check">
+                        <span class="checkbox-label-title">Meeting Summary (Internal)</span>
+                        <span class="checkbox-label-desc">Notes for internal staff about student's background and goals</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Student Summary -->
+            <div class="document-option">
+                <div class="checkbox-wrapper">
+                    <input
+                        type="checkbox"
+                        id="summary-student-check"
+                        name="documents"
+                        value="summary_student"
+                    >
+                    <label for="summary-student-check">
+                        <span class="checkbox-label-title">Meeting Summary (For Student)</span>
+                        <span class="checkbox-label-desc">Summary of the interview to send to the student</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Action Items -->
+            <div class="document-option">
+                <div class="checkbox-wrapper">
+                    <input
+                        type="checkbox"
+                        id="action-items-check"
+                        name="documents"
+                        value="action_items"
+                    >
+                    <label for="action-items-check">
+                        <span class="checkbox-label-title">Action Items</span>
+                        <span class="checkbox-label-desc">Follow-up tasks and next steps for the student</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="document-actions">
+                <button type="submit" id="generate-btn" class="btn btn-primary btn-large">
+                    ✓ Generate Selected Documents
+                </button>
+                <a href="{{ url_for('student_profile', student_id=student.student_id) }}" class="btn btn-secondary btn-large">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </section>
+
+    <!-- Results Area -->
+    <section class="results-section" id="results-section" style="display: none;">
+        <h2 class="section-title">Generated Documents</h2>
+
+        <div id="documents-list" class="documents-list">
+            <!-- Generated documents will appear here -->
+        </div>
+
+        <div class="results-actions">
+            <button id="print-btn" class="btn btn-secondary">🖨 Print All Documents</button>
+            <button id="email-btn" class="btn btn-secondary">✉ Email to Student</button>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const studentId = '{{ student.student_id }}';
+    const sessionId = '{{ session.id }}';
+    const form = document.getElementById('document-form');
+    const generateBtn = document.getElementById('generate-btn');
+    const resultsSection = document.getElementById('results-section');
+    const documentsList = document.getElementById('documents-list');
+    const coverLetterCheck = document.getElementById('cover-letter-check');
+    const coverLetterFields = document.getElementById('cover-letter-fields');
+    const printBtn = document.getElementById('print-btn');
+    const emailBtn = document.getElementById('email-btn');
+
+    let generatedDocuments = {};
+
+    // Show/hide optional fields for cover letter
+    coverLetterCheck.addEventListener('change', () => {
+        if (coverLetterCheck.checked) {
+            coverLetterFields.style.display = 'block';
+        } else {
+            coverLetterFields.style.display = 'none';
+        }
+    });
+
+    // Form submission
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // Get selected documents
+        const selectedDocuments = Array.from(
+            document.querySelectorAll('input[name="documents"]:checked')
+        ).map(cb => cb.value);
+
+        if (selectedDocuments.length === 0) {
+            alert('Please select at least one document to generate.');
+            return;
+        }
+
+        // Collect form data
+        const formData = {
+            session_id: sessionId,
+            documents: selectedDocuments,
+            job_title: document.getElementById('job-title').value,
+            employer: document.getElementById('employer').value
+        };
+
+        try {
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating documents...';
+
+            const response = await fetch(`/interview/${studentId}/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
+
+            generatedDocuments = data.documents;
+            displayDocuments(data.documents);
+
+            // Show results
+            resultsSection.style.display = 'block';
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        } catch (error) {
+            console.error('Error generating documents:', error);
+            alert(`Error: ${error.message}`);
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.textContent = '✓ Generate Selected Documents';
+        }
+    });
+
+    // Display generated documents
+    function displayDocuments(documents) {
+        documentsList.innerHTML = '';
+
+        for (const [docType, content] of Object.entries(documents)) {
+            const docName = getDocumentName(docType);
+            const docDiv = document.createElement('div');
+            docDiv.className = 'document-result';
+
+            docDiv.innerHTML = `
+                <div class="document-header">
+                    <h3>${docName}</h3>
+                    <button
+                        type="button"
+                        class="btn btn-small btn-secondary"
+                        onclick="downloadDocument('${docType}', '${docName}')">
+                        ⬇ Download
+                    </button>
+                </div>
+                <div class="document-preview">
+                    ${escapeHtml(content)}
+                </div>
+            `;
+
+            documentsList.appendChild(docDiv);
+        }
+    }
+
+    // Get friendly document name
+    function getDocumentName(docType) {
+        const names = {
+            'cv': 'Curriculum Vitae',
+            'cover_letter': 'Cover Letter',
+            'summary_internal': 'Internal Meeting Summary',
+            'summary_student': 'Student Meeting Summary',
+            'action_items': 'Action Items'
+        };
+        return names[docType] || docType;
+    }
+
+    // Download document
+    function downloadDocument(docType, docName) {
+        const content = generatedDocuments[docType];
+        if (!content) return;
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${docType}_{{ student.student_id }}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    }
+
+    // Print all documents
+    printBtn.addEventListener('click', () => {
+        const printWindow = window.open('', '', 'width=900,height=700');
+        const printContent = document.querySelector('.documents-list').innerHTML;
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>{{ student.first_name }} {{ student.surname }} - Documents</title>
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            margin: 2cm;
+                            line-height: 1.6;
+                            color: #333;
+                        }
+                        .document-result {
+                            margin-bottom: 3cm;
+                            page-break-inside: avoid;
+                        }
+                        .document-header {
+                            border-bottom: 2px solid #1B4F72;
+                            margin-bottom: 1rem;
+                            padding-bottom: 0.5rem;
+                        }
+                        .document-header h3 {
+                            margin: 0 0 0.5rem 0;
+                            color: #1B4F72;
+                        }
+                        .document-preview {
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>{{ student.first_name }} {{ student.surname }}</h1>
+                    <p>Generated on ${new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
+                    ${printContent}
+                </body>
+            </html>
+        `);
+
+        printWindow.document.close();
+        printWindow.print();
+    });
+
+    // Email documents (simplified)
+    emailBtn.addEventListener('click', () => {
+        const email = '{{ student.email }}';
+        if (!email) {
+            alert('Student does not have an email address on file.');
+            return;
+        }
+
+        alert(`Documents would be emailed to ${email}. This feature would be implemented with a backend email service.`);
+    });
+
+    // Utility
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Register New Student - Multilingual Interview System{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h1 class="page-title">Register New Student</h1>
+    <p class="form-subtitle">Create a student profile to begin the interview process.</p>
+
+    <form method="POST" action="{{ url_for('student_new_create') }}" class="form">
+        <!-- Personal Details Section -->
+        <fieldset class="form-section">
+            <legend class="section-title">Personal Details</legend>
+
+            <div class="form-group">
+                <label for="first_name">First Name *</label>
+                <input
+                    type="text"
+                    id="first_name"
+                    name="first_name"
+                    class="form-input"
+                    required
+                    placeholder="First name"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="surname">Surname *</label>
+                <input
+                    type="text"
+                    id="surname"
+                    name="surname"
+                    class="form-input"
+                    required
+                    placeholder="Surname"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="dob">Date of Birth</label>
+                <input
+                    type="date"
+                    id="dob"
+                    name="dob"
+                    class="form-input"
+                >
+            </div>
+        </fieldset>
+
+        <!-- Location Section -->
+        <fieldset class="form-section">
+            <legend class="section-title">Location</legend>
+
+            <div class="form-group">
+                <label for="suburb">Suburb</label>
+                <input
+                    type="text"
+                    id="suburb"
+                    name="suburb"
+                    class="form-input"
+                    placeholder="e.g., Fitzroy, Brunswick"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="postcode">Postcode</label>
+                <input
+                    type="text"
+                    id="postcode"
+                    name="postcode"
+                    class="form-input"
+                    placeholder="e.g., 3068"
+                >
+            </div>
+        </fieldset>
+
+        <!-- Contact Section -->
+        <fieldset class="form-section">
+            <legend class="section-title">Contact Details</legend>
+
+            <div class="form-group">
+                <label for="phone">Phone</label>
+                <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    class="form-input"
+                    placeholder="Mobile or landline"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    class="form-input"
+                    placeholder="student@example.com"
+                >
+            </div>
+        </fieldset>
+
+        <!-- Languages Section -->
+        <fieldset class="form-section">
+            <legend class="section-title">Languages</legend>
+
+            <div class="form-group">
+                <label for="preferred_language">Preferred Language *</label>
+                <select
+                    id="preferred_language"
+                    name="preferred_language"
+                    class="form-select"
+                    required
+                >
+                    <option value="">— Select a language —</option>
+                    {% for lang_code, lang_name in SUPPORTED_LANGUAGES.items() %}
+                        <option value="{{ lang_code }}">{{ lang_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="other_languages">Other Languages Spoken</label>
+                <input
+                    type="text"
+                    id="other_languages"
+                    name="other_languages"
+                    class="form-input"
+                    placeholder="e.g., Spanish, Mandarin, Vietnamese"
+                >
+            </div>
+
+            <div class="form-group">
+                <fieldset class="radio-group">
+                    <legend class="radio-group-label">English Level *</legend>
+                    {% for level in ENGLISH_LEVELS %}
+                        <div class="radio-option">
+                            <input
+                                type="radio"
+                                id="english_level_{{ loop.index }}"
+                                name="english_level"
+                                value="{{ level }}"
+                                required
+                            >
+                            <label for="english_level_{{ loop.index }}">{{ level }}</label>
+                        </div>
+                    {% endfor %}
+                </fieldset>
+            </div>
+        </fieldset>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-large">Register Student</button>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-large">Cancel</a>
+        </div>
+
+        <p class="form-note">* Required fields</p>
+    </form>
+</div>
+{% endblock %}

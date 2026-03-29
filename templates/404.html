@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Page Not Found - Multilingual Interview System{% endblock %}
+
+{% block content %}
+<div style="text-align: center; padding: 4rem 1rem;">
+    <h1 style="font-size: 3rem; color: #E74C3C; margin-bottom: 1rem;">404</h1>
+    <h2 style="color: #1B4F72; margin-bottom: 1rem;">Page Not Found</h2>
+    <p style="color: #7F8C8D; margin-bottom: 2rem; font-size: 1.1rem;">
+        The page you're looking for doesn't exist or has been moved.
+    </p>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-large">
+        Return to Dashboard
+    </a>
+</div>
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}{{ student.first_name }} {{ student.surname }} - Multilingual Interview System{% endblock %}
+
+{% block content %}
+<div class="student-profile-container">
+    <!-- Student Info Card -->
+    <section class="info-section">
+        <div class="info-card">
+            <h1 class="student-name">{{ student.first_name }} {{ student.surname }}</h1>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Student ID</span>
+                    <span class="info-value">{{ student.student_id }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Language</span>
+                    <span class="info-value">{{ student.preferred_language }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">English Level</span>
+                    <span class="info-value">{{ student.english_level }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Registered</span>
+                    <span class="info-value">{{ student.created_at.strftime('%d %b %Y') }}</span>
+                </div>
+            </div>
+
+            {% if student.phone or student.email or student.suburb %}
+                <div class="info-divider"></div>
+                <div class="contact-info">
+                    {% if student.phone %}
+                        <div class="contact-item">
+                            <strong>Phone:</strong> {{ student.phone }}
+                        </div>
+                    {% endif %}
+                    {% if student.email %}
+                        <div class="contact-item">
+                            <strong>Email:</strong> <a href="mailto:{{ student.email }}">{{ student.email }}</a>
+                        </div>
+                    {% endif %}
+                    {% if student.suburb %}
+                        <div class="contact-item">
+                            <strong>Location:</strong> {{ student.suburb }}, VIC {{ student.postcode }}
+                        </div>
+                    {% endif %}
+                    {% if student.other_languages %}
+                        <div class="contact-item">
+                            <strong>Other Languages:</strong> {{ student.other_languages }}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <div class="info-actions">
+                <a href="{{ url_for('interview', student_id=student.student_id) }}" class="btn btn-primary btn-large">
+                    + Start New Interview
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Session History -->
+    <section class="sessions-section">
+        <h2 class="section-title">Interview Sessions</h2>
+
+        {% if sessions %}
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Session #</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Documents</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for session in sessions %}
+                            <tr>
+                                <td>{{ session.created_at.strftime('%d %b %Y, %H:%M') }}</td>
+                                <td class="center">{{ loop.revindex }}</td>
+                                <td class="center">
+                                    {% if session.duration_minutes %}
+                                        {{ session.duration_minutes }} min
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="status-badge status-{{ session.status }}">
+                                        {{ session.status|title }}
+                                    </span>
+                                </td>
+                                <td class="center">
+                                    {% if session.transcript_english %}
+                                        <span class="badge badge-success">✓ Transcript</span>
+                                    {% endif %}
+                                </td>
+                                <td class="actions-cell">
+                                    {% if session.status == 'completed' %}
+                                        <a href="{{ url_for('generate_documents_page', student_id=student.student_id) }}" class="btn btn-small btn-primary">
+                                            Generate Docs
+                                        </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <p>No interview sessions yet.</p>
+                <a href="{{ url_for('interview', student_id=student.student_id) }}" class="btn btn-primary">Start First Interview</a>
+            </div>
+        {% endif %}
+    </section>
+
+    <!-- Files Section -->
+    <section class="files-section">
+        <h2 class="section-title">Files & Documents</h2>
+
+        {% if student_files and student_files.sessions %}
+            {% for sess in student_files.sessions %}
+                <h3 style="margin-top:1rem;color:#2E86C1;">{{ sess.name }}</h3>
+                <div class="files-list">
+                    {% for file in sess.files %}
+                        <div class="file-item">
+                            <div class="file-icon">📄</div>
+                            <div class="file-details">
+                                <div class="file-name">{{ file.name }}</div>
+                                <div class="file-meta">
+                                    {{ (file.size / 1024)|round(1) }} KB • {{ file.modified[:10] }}
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <a href="{{ url_for('serve_file', filepath=file.path) }}" class="btn btn-small btn-secondary">Download</a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <p>No documents generated yet. Complete an interview and generate documents.</p>
+            </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

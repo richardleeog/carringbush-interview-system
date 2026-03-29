@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Multilingual Interview System{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Welcome Section -->
+    <section class="welcome-section">
+        <h1 class="page-title">Welcome to Multilingual Interview System</h1>
+        <p class="welcome-text">Help job seekers create professional CVs through recorded interviews in their preferred language.</p>
+        <a href="{{ url_for('student_new_form') }}" class="btn btn-primary btn-large">
+            + Register New Student
+        </a>
+    </section>
+
+    <!-- Quick Search -->
+    <section class="search-section">
+        <div class="search-container">
+            <input type="text" id="quick-search" class="search-input" placeholder="Search students by name, ID, or language...">
+            <div id="search-results" class="search-results"></div>
+        </div>
+    </section>
+
+    <!-- Statistics Cards -->
+    <section class="stats-section">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ total_students }}</div>
+                <div class="stat-label">Total Students</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ sessions_this_week }}</div>
+                <div class="stat-label">Sessions This Week</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ languages_supported }}</div>
+                <div class="stat-label">Languages Supported</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Recent Students -->
+    <section class="recent-students-section">
+        <h2 class="section-title">Recent Students</h2>
+        {% if recent_students %}
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Student ID</th>
+                            <th>Language</th>
+                            <th>Last Session</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in recent_students %}
+                            <tr>
+                                <td>{{ student.first_name }} {{ student.surname }}</td>
+                                <td class="student-id">{{ student.student_id }}</td>
+                                <td>{{ student.preferred_language }}</td>
+                                <td>
+                                    {% if student.sessions %}
+                                        {{ student.sessions[0].created_at.strftime('%d %b %Y') }}
+                                    {% else %}
+                                        Never
+                                    {% endif %}
+                                </td>
+                                <td class="actions-cell">
+                                    <a href="{{ url_for('student_profile', student_id=student.student_id) }}" class="btn btn-small btn-secondary">View</a>
+                                    <a href="{{ url_for('interview', student_id=student.student_id) }}" class="btn btn-small btn-primary">New Interview</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <p>No students yet. <a href="{{ url_for('student_new_form') }}">Register the first student</a></p>
+            </div>
+        {% endif %}
+    </section>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Quick search functionality
+    const searchInput = document.getElementById('quick-search');
+    const searchResults = document.getElementById('search-results');
+
+    searchInput.addEventListener('input', function(e) {
+        const query = e.target.value.trim();
+
+        if (query.length < 2) {
+            searchResults.innerHTML = '';
+            return;
+        }
+
+        fetch(`{{ url_for('api_search_students') }}?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.results.length === 0) {
+                    searchResults.innerHTML = '<div class="search-no-results">No students found</div>';
+                    return;
+                }
+
+                const html = data.results.map(student => `
+                    <a href="/students/${student.id}" class="search-result-item">
+                        <div class="search-result-name">${student.name}</div>
+                        <div class="search-result-meta">${student.student_id} • ${student.language}</div>
+                    </a>
+                `).join('');
+
+                searchResults.innerHTML = html;
+            })
+            .catch(error => console.error('Search error:', error));
+    });
+
+    // Close search results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.search-container')) {
+            searchResults.innerHTML = '';
+        }
+    });
+</script>
+{% endblock %}
