@@ -1,126 +1,139 @@
 #!/bin/bash
 # =============================================================================
-# Multilingual Interview System — Setup Script for macOS
+# Multilingual Interview System — One-Click Setup for macOS
 # =============================================================================
-# Run this script once to set everything up on a MacBook.
-# After setup, use start.sh to launch the system.
+# Just run:   bash setup.sh
+# Everything is installed automatically. No questions asked.
+# After setup, run:   bash start.sh
 # =============================================================================
 
 set -e
 
 echo ""
 echo "=========================================="
-echo "  Multilingual Interview System Setup"
+echo "  Multilingual Interview System"
+echo "  Setting up — please wait..."
 echo "=========================================="
 echo ""
 
-# Check Python version
+# ------------------------------------------------------------------
+# Step 1: Check for Python
+# ------------------------------------------------------------------
 PYTHON_CMD=""
 if command -v python3 &> /dev/null; then
     PYTHON_CMD="python3"
 elif command -v python &> /dev/null; then
     PYTHON_CMD="python"
 else
-    echo "ERROR: Python is not installed."
-    echo "Please install Python 3.9 or later from https://www.python.org/downloads/"
+    echo ""
+    echo "  Python is not installed on your Mac."
+    echo ""
+    echo "  To install it:"
+    echo "    1. Open Safari and go to: https://www.python.org/downloads/"
+    echo "    2. Click the big yellow Download button"
+    echo "    3. Open the downloaded file and follow the steps"
+    echo "    4. Once installed, run this script again"
+    echo ""
     exit 1
 fi
 
 PY_VERSION=$($PYTHON_CMD --version 2>&1)
-echo "Found: $PY_VERSION"
+echo "  Found $PY_VERSION — good."
 
-# Check if pip is available
-if ! $PYTHON_CMD -m pip --version &> /dev/null; then
-    echo "ERROR: pip is not available. Please install pip."
-    exit 1
+# ------------------------------------------------------------------
+# Step 2: Check for Homebrew (needed for LibreTranslate)
+# ------------------------------------------------------------------
+if ! command -v brew &> /dev/null; then
+    echo ""
+    echo "  Installing Homebrew (a tool that helps install software)..."
+    echo "  You may be asked for your Mac password — this is normal."
+    echo ""
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+    # Add Homebrew to PATH for Apple Silicon Macs
+    if [ -f "/opt/homebrew/bin/brew" ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+    fi
 fi
 
-# Create virtual environment
-echo ""
-echo "Creating virtual environment..."
+echo "  Homebrew ready."
+
+# ------------------------------------------------------------------
+# Step 3: Install ffmpeg (needed by Whisper for audio processing)
+# ------------------------------------------------------------------
+if ! command -v ffmpeg &> /dev/null; then
+    echo "  Installing ffmpeg (for audio processing)..."
+    brew install ffmpeg --quiet
+fi
+echo "  ffmpeg ready."
+
+# ------------------------------------------------------------------
+# Step 4: Create virtual environment
+# ------------------------------------------------------------------
+echo "  Creating a safe space for the system's software..."
+if [ -d "venv" ]; then
+    rm -rf venv
+fi
 $PYTHON_CMD -m venv venv
 source venv/bin/activate
 
-echo "Virtual environment activated."
+pip install --upgrade pip --quiet 2>/dev/null
 
-# Upgrade pip
-pip install --upgrade pip --quiet
+# ------------------------------------------------------------------
+# Step 5: Install everything
+# ------------------------------------------------------------------
+echo "  Installing the interview system (this takes a few minutes)..."
+pip install flask flask-sqlalchemy python-docx gunicorn --quiet 2>/dev/null
+echo "  Core system installed."
 
-# Install core dependencies (without Whisper first — it's large)
-echo ""
-echo "Installing core dependencies..."
-pip install flask flask-sqlalchemy python-docx gunicorn libretranslatepy --quiet
+echo "  Installing speech recognition (Whisper — this is the big one)..."
+pip install setuptools --quiet 2>/dev/null
+pip install openai-whisper --quiet 2>/dev/null
+echo "  Speech recognition installed."
 
-echo "Core dependencies installed."
+echo "  Installing translation service..."
+pip install libretranslatepy --quiet 2>/dev/null
+echo "  Translation service installed."
 
-# Ask about Whisper
-echo ""
-echo "=========================================="
-echo "  Speech Recognition Setup"
-echo "=========================================="
-echo ""
-echo "OpenAI Whisper provides speech-to-text transcription."
-echo "It requires about 1-3 GB of disk space for the model."
-echo ""
-read -p "Install Whisper now? (y/n): " INSTALL_WHISPER
+# ------------------------------------------------------------------
+# Step 6: Install LibreTranslate (the actual translation server)
+# ------------------------------------------------------------------
+echo "  Installing LibreTranslate (free translation engine)..."
+pip install libretranslate --quiet 2>/dev/null
+echo "  LibreTranslate installed."
 
-if [[ "$INSTALL_WHISPER" =~ ^[Yy]$ ]]; then
-    echo "Installing Whisper (this may take a few minutes)..."
-    pip install openai-whisper --quiet
-    echo "Whisper installed successfully."
-else
-    echo "Skipping Whisper. You can install it later with:"
-    echo "  source venv/bin/activate && pip install openai-whisper"
-fi
-
-# Ask about Claude API
-echo ""
-echo "=========================================="
-echo "  AI Document Generation Setup"
-echo "=========================================="
-echo ""
-echo "The system can use Claude AI to polish documents."
-echo "This requires an API key from Anthropic (free tier available)."
-echo ""
-read -p "Do you have an Anthropic API key? (y/n): " HAS_API_KEY
-
-if [[ "$HAS_API_KEY" =~ ^[Yy]$ ]]; then
-    read -p "Enter your API key: " API_KEY
-    pip install anthropic --quiet
-    echo "export ANTHROPIC_API_KEY='$API_KEY'" >> venv/bin/activate
-    echo "API key saved. Claude will be used for document generation."
-else
-    echo "No API key — the system will use template-based document"
-    echo "generation (still produces professional documents)."
-    echo "You can add an API key later by running:"
-    echo "  export ANTHROPIC_API_KEY='your-key-here'"
-fi
-
-# Create the database
-echo ""
-echo "Setting up database..."
+# ------------------------------------------------------------------
+# Step 7: Set up the database
+# ------------------------------------------------------------------
+echo "  Setting up database..."
 $PYTHON_CMD -c "
-from app import app, db, init_services
+from app import app, db
 with app.app_context():
     db.create_all()
-    init_services()
-print('Database created.')
+print('  Database ready.')
 "
 
 # Create student files directory
 mkdir -p student_files
 
+# ------------------------------------------------------------------
+# Done!
+# ------------------------------------------------------------------
 echo ""
 echo "=========================================="
 echo "  Setup Complete!"
 echo "=========================================="
 echo ""
-echo "To start the system, run:"
+echo "  Everything is installed and ready to go."
 echo ""
-echo "  ./start.sh"
+echo "  To start the system, run:"
 echo ""
-echo "Then open your web browser and go to:"
+echo "      bash start.sh"
 echo ""
-echo "  http://localhost:5000"
+echo "  Then open your browser and go to:"
+echo ""
+echo "      http://localhost:5000"
 echo ""
 echo "=========================================="
+echo ""

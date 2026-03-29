@@ -25,7 +25,7 @@ class Config:
 
     # Translation service
     # Set to a LibreTranslate instance URL, or "local" to use the bundled one
-    LIBRETRANSLATE_URL = os.environ.get("LIBRETRANSLATE_URL", "https://libretranslate.com")
+    LIBRETRANSLATE_URL = os.environ.get("LIBRETRANSLATE_URL", "http://127.0.0.1:5555")
 
     # AI document generation
     # Set your Anthropic API key here or as an environment variable
