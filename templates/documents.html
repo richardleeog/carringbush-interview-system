@@ -257,8 +257,8 @@
                         Download
                     </button>
                 </div>
-                <div style="padding: 1.2rem; background: #fafafa; max-height: 400px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; color: #333;">
-${escapeHtml(content)}
+                <div style="padding: 1.2rem; background: white; max-height: 500px; overflow-y: auto;">
+                    ${content}
                 </div>
             `;
 
@@ -278,16 +278,21 @@ ${escapeHtml(content)}
         return names[docType] || docType;
     }
 
-    // Download single document
+    // Download single document as HTML file (opens in Word and browsers)
     function downloadDocument(docType) {
         const content = generatedDocuments[docType];
         if (!content) return;
 
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const fullHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${getDocumentName(docType)} - ${studentName}</title>
+<style>body{font-family:'Segoe UI',Arial,sans-serif;margin:2cm;color:#1a1a1a;line-height:1.5;}</style>
+</head><body>${content}</body></html>`;
+
+        const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${getDocumentName(docType).replace(/\s+/g, '_')}_${studentSid}.txt`;
+        a.download = `${getDocumentName(docType).replace(/\s+/g, '_')}_${studentSid}.html`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -309,12 +314,7 @@ ${escapeHtml(content)}
         for (const [docType, content] of Object.entries(generatedDocuments)) {
             printContent += `
                 <div style="page-break-after: always; margin-bottom: 2cm;">
-                    <h2 style="color: #1B4F72; border-bottom: 2px solid #1B4F72; padding-bottom: 0.5rem;">
-                        ${getDocumentName(docType)}
-                    </h2>
-                    <pre style="white-space: pre-wrap; word-wrap: break-word; font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.6;">
-${escapeHtml(content)}
-                    </pre>
+                    ${content}
                 </div>
             `;
         }
@@ -324,13 +324,11 @@ ${escapeHtml(content)}
                 <head>
                     <title>${studentName} - Documents</title>
                     <style>
-                        body { font-family: Arial, sans-serif; margin: 2cm; color: #333; }
+                        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 2cm; color: #333; }
                         @media print { div { page-break-after: always; } }
                     </style>
                 </head>
                 <body>
-                    <h1 style="color: #1B4F72;">${studentName}</h1>
-                    <p>Generated on ${new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
                     ${printContent}
                 </body>
             </html>
@@ -339,12 +337,5 @@ ${escapeHtml(content)}
         printWindow.document.close();
         printWindow.print();
     });
-
-    // Utility
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 </script>
 {% endblock %}

@@ -415,276 +415,480 @@ def generate_documents(student_id):
         for doc_type in doc_types:
             try:
                 if doc_type == "cv":
-                    lines = [
-                        f"{'=' * 50}",
-                        f"CURRICULUM VITAE",
-                        f"{'=' * 50}",
-                        "",
-                        f"{name.upper()}",
-                        "",
-                    ]
-                    contact = []
+                    # Build a professional HTML CV
+                    contact_parts = []
                     if student.phone:
-                        contact.append(f"Phone: {student.phone}")
+                        contact_parts.append(student.phone)
                     if student.email:
-                        contact.append(f"Email: {student.email}")
+                        contact_parts.append(student.email)
+                    location = ""
                     if student.suburb:
-                        contact.append(
-                            f"Location: {student.suburb}"
-                            + (f" {student.postcode}" if student.postcode else "")
-                        )
-                    lines.extend(contact)
-                    lines.append("")
+                        location = student.suburb + (f" {student.postcode}" if student.postcode else "")
+                        contact_parts.append(location)
 
-                    lines.append("PROFESSIONAL SUMMARY")
-                    lines.append("-" * 30)
-                    lines.append(
-                        f"Motivated and reliable worker seeking employment in "
-                        f"Melbourne. Speaks {lang_name} and English. "
-                        + (sess.additional_info or "Eager to contribute to a team environment.")
+                    # Professional summary – expand with detail
+                    add_info = sess.additional_info or ""
+                    goals = ""
+                    traits = ""
+                    if add_info:
+                        # Extract goals and personal traits from additional_info
+                        parts = [p.strip() for p in add_info.replace(". ", ".|").split("|") if p.strip()]
+                        for p in parts:
+                            if "goal" in p.lower() or "aspir" in p.lower() or "become" in p.lower():
+                                goals = p.rstrip(".")
+                            else:
+                                traits = p.rstrip(".")
+
+                    summary_lines = []
+                    summary_lines.append(
+                        f"Dedicated and dependable professional with a strong background in "
+                        f"the {job_prefs.get('industry', 'hospitality') if isinstance(job_prefs, dict) else 'hospitality'} industry."
                     )
-                    lines.append("")
-
                     if work_exp:
-                        lines.append("WORK EXPERIENCE")
-                        lines.append("-" * 30)
+                        total_exp = work_exp[0].get("duration", "")
+                        summary_lines.append(
+                            f"Brings {total_exp} of hands-on experience as a {work_exp[0].get('title', 'professional')}"
+                            + (f", complemented by {work_exp[-1].get('duration', '')} in a {work_exp[-1].get('title', '').lower()} role" if len(work_exp) > 1 else "")
+                            + "."
+                        )
+                    summary_lines.append(
+                        f"Fluent {lang_name} speaker with {student.english_level or 'developing'} English, "
+                        f"currently enrolled in language studies to strengthen workplace communication."
+                    )
+                    if traits:
+                        summary_lines.append(f"{traits}.")
+                    if goals:
+                        summary_lines.append(f"Career aspiration: {goals.lower().replace('goal:', '').replace('goal', '').strip()}.")
+                    prof_summary = " ".join(summary_lines)
+
+                    # Work experience role descriptions based on title
+                    role_descriptions = {
+                        "cook": [
+                            "Prepared a wide range of dishes to a high standard, ensuring consistent quality and presentation",
+                            "Managed food preparation schedules, ingredient ordering, and stock rotation",
+                            "Maintained strict food safety and hygiene standards in accordance with local regulations",
+                            "Collaborated with kitchen team to develop daily specials and seasonal menus",
+                            "Trained junior kitchen staff on preparation techniques and workplace safety procedures",
+                        ],
+                        "waiter": [
+                            "Provided attentive and friendly table service to guests in a fast-paced dining environment",
+                            "Accurately took customer orders and communicated dietary requirements to kitchen staff",
+                            "Handled point-of-sale transactions, cash handling, and end-of-shift reconciliation",
+                            "Maintained a clean and welcoming dining area, setting tables and managing reservations",
+                            "Built positive relationships with regular customers, contributing to repeat business",
+                        ],
+                        "kitchen hand": [
+                            "Supported kitchen operations including food preparation, cleaning, and dishwashing",
+                            "Ensured all work areas met hygiene and safety requirements at all times",
+                            "Assisted chefs with ingredient preparation, portioning, and plating",
+                            "Managed stock rotation and proper storage of perishable goods",
+                        ],
+                        "cleaner": [
+                            "Maintained cleanliness across commercial and residential properties to a high standard",
+                            "Operated cleaning equipment and handled chemical supplies safely",
+                            "Followed detailed cleaning schedules and reported maintenance issues promptly",
+                        ],
+                    }
+
+                    # Build work experience HTML
+                    work_html = ""
+                    if work_exp:
                         for job in work_exp:
                             t = job.get("title", "Role")
                             e = job.get("employer", "Employer")
                             d = job.get("duration", "")
-                            lines.append(f"  {t}  |  {e}  |  {d}")
-                        lines.append("")
+                            # Find matching role descriptions
+                            descs = []
+                            for key, desc_list in role_descriptions.items():
+                                if key in t.lower():
+                                    descs = desc_list
+                                    break
+                            if not descs:
+                                descs = [
+                                    f"Performed duties as {t} to a reliable and professional standard",
+                                    "Worked collaboratively within a team to meet daily operational targets",
+                                    "Demonstrated punctuality, commitment, and a positive attitude",
+                                ]
+                            bullets = "".join(f"<li>{d_item}</li>" for d_item in descs)
+                            work_html += f"""
+                            <div style="margin-bottom: 14px;">
+                                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                                    <strong style="font-size: 14px; color: #1a1a1a;">{t}</strong>
+                                    <span style="color: #555; font-size: 13px; font-style: italic;">{d}</span>
+                                </div>
+                                <div style="color: #333; font-size: 13px; margin-bottom: 4px;">{e}</div>
+                                <ul style="margin: 4px 0 0 18px; padding: 0; color: #444; font-size: 13px; line-height: 1.6;">
+                                    {bullets}
+                                </ul>
+                            </div>"""
 
-                    if skills:
-                        lines.append("KEY SKILLS")
-                        lines.append("-" * 30)
-                        if isinstance(skills, list):
-                            lines.append("  " + "  |  ".join(str(s) for s in skills))
-                        lines.append("")
+                    # Skills — group into categories
+                    skill_categories = {}
+                    if skills and isinstance(skills, list):
+                        for s in skills:
+                            s_lower = str(s).lower()
+                            if any(kw in s_lower for kw in ["cook", "food", "dish", "cuisine", "kitchen", "preparation"]):
+                                skill_categories.setdefault("Culinary & Food Preparation", []).append(str(s))
+                            elif any(kw in s_lower for kw in ["customer", "service", "team", "communication"]):
+                                skill_categories.setdefault("Customer Service & Teamwork", []).append(str(s))
+                            elif any(kw in s_lower for kw in ["clean", "hygiene", "safety"]):
+                                skill_categories.setdefault("Workplace Health & Safety", []).append(str(s))
+                            else:
+                                skill_categories.setdefault("Professional Skills", []).append(str(s))
+                    skills_html = ""
+                    for cat, cat_skills in skill_categories.items():
+                        pills = " &bull; ".join(cat_skills)
+                        skills_html += f'<div style="margin-bottom: 6px;"><strong style="font-size: 13px;">{cat}:</strong> <span style="font-size: 13px; color: #444;">{pills}</span></div>'
 
+                    # Education
+                    edu_html = ""
                     if education:
-                        lines.append("EDUCATION & TRAINING")
-                        lines.append("-" * 30)
                         for ed in education:
                             inst = ed.get("institution", "")
                             qual = ed.get("qualification", "")
                             yr = ed.get("year", "")
-                            lines.append(f"  {qual}  |  {inst}  |  {yr}")
-                        lines.append("")
+                            edu_html += f"""
+                            <div style="margin-bottom: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                                    <strong style="font-size: 13px;">{qual}</strong>
+                                    <span style="font-size: 13px; color: #555; font-style: italic;">{yr}</span>
+                                </div>
+                                <div style="font-size: 13px; color: #333;">{inst}</div>
+                            </div>"""
 
+                    # Certificates
+                    cert_html = ""
                     if certificates:
-                        lines.append("CERTIFICATES")
-                        lines.append("-" * 30)
-                        for cert in certificates:
-                            lines.append(f"  - {cert}")
-                        lines.append("")
+                        cert_items = "".join(f"<li>{c}</li>" for c in certificates)
+                        cert_html = f'<ul style="margin: 4px 0 0 18px; padding: 0; font-size: 13px; color: #444;">{cert_items}</ul>'
 
-                    lines.append("LANGUAGES")
-                    lines.append("-" * 30)
-                    lines.append(f"  {lang_name}: Native speaker")
-                    lines.append(f"  English: {student.english_level or 'Basic'}")
-                    lines.append("")
+                    # Availability
+                    avail_items = []
+                    if availability:
+                        if availability.get("mornings"):
+                            avail_items.append("Mornings")
+                        if availability.get("afternoons"):
+                            avail_items.append("Afternoons")
+                        if availability.get("evenings"):
+                            avail_items.append("Evenings")
+                        if availability.get("weekends"):
+                            avail_items.append("Weekends")
+                    avail_text = ", ".join(avail_items) if avail_items else "Flexible"
 
-                    if sess.transport:
-                        lines.append("TRANSPORT")
-                        lines.append("-" * 30)
-                        lines.append(f"  {sess.transport}")
-                        lines.append("")
+                    cv_html = f"""<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 700px; margin: 0 auto; color: #1a1a1a; line-height: 1.5;">
+    <!-- Header -->
+    <div style="text-align: center; border-bottom: 3px solid #1B4F72; padding-bottom: 16px; margin-bottom: 20px;">
+        <h1 style="margin: 0 0 6px 0; font-size: 26px; color: #1B4F72; letter-spacing: 2px;">{name.upper()}</h1>
+        <div style="font-size: 14px; color: #555;">{" &nbsp;|&nbsp; ".join(contact_parts)}</div>
+    </div>
 
-                    lines.append("REFERENCES")
-                    lines.append("-" * 30)
-                    lines.append("  Available upon request")
-                    lines.append("")
-                    lines.append(f"Generated: {today_str}")
+    <!-- Professional Summary -->
+    <div style="margin-bottom: 20px;">
+        <h2 style="font-size: 15px; color: #1B4F72; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin: 0 0 8px 0;">Professional Summary</h2>
+        <p style="font-size: 13px; color: #333; margin: 0; text-align: justify;">{prof_summary}</p>
+    </div>
 
-                    generated["cv"] = "\n".join(lines)
+    <!-- Work Experience -->
+    {"" if not work_exp else f'''<div style="margin-bottom: 20px;">
+        <h2 style="font-size: 15px; color: #1B4F72; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin: 0 0 10px 0;">Work Experience</h2>
+        {work_html}
+    </div>'''}
+
+    <!-- Key Skills -->
+    {"" if not skills_html else f'''<div style="margin-bottom: 20px;">
+        <h2 style="font-size: 15px; color: #1B4F72; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin: 0 0 8px 0;">Key Skills</h2>
+        {skills_html}
+    </div>'''}
+
+    <!-- Education & Training -->
+    {"" if not education else f'''<div style="margin-bottom: 20px;">
+        <h2 style="font-size: 15px; color: #1B4F72; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin: 0 0 8px 0;">Education &amp; Training</h2>
+        {edu_html}
+    </div>'''}
+
+    <!-- Certificates & Licences -->
+    {"" if not certificates else f'''<div style="margin-bottom: 20px;">
+        <h2 style="font-size: 15px; color: #1B4F72; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin: 0 0 8px 0;">Certificates &amp; Licences</h2>
+        {cert_html}
+    </div>'''}
+
+    <!-- Languages -->
+    <div style="margin-bottom: 20px;">
+        <h2 style="font-size: 15px; color: #1B4F72; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin: 0 0 8px 0;">Languages</h2>
+        <div style="font-size: 13px; color: #444;">
+            <div style="margin-bottom: 4px;"><strong>{lang_name}:</strong> Native speaker</div>
+            <div><strong>English:</strong> {student.english_level or 'Basic'} &mdash; currently enrolled in English language programme</div>
+        </div>
+    </div>
+
+    <!-- Availability & Transport -->
+    <div style="margin-bottom: 20px;">
+        <h2 style="font-size: 15px; color: #1B4F72; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin: 0 0 8px 0;">Availability &amp; Transport</h2>
+        <div style="font-size: 13px; color: #444;">
+            <div style="margin-bottom: 4px;"><strong>Available:</strong> {avail_text}</div>
+            <div><strong>Transport:</strong> {sess.transport or 'Public transport'}</div>
+        </div>
+    </div>
+
+    <!-- References -->
+    <div style="margin-bottom: 10px;">
+        <h2 style="font-size: 15px; color: #1B4F72; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin: 0 0 8px 0;">References</h2>
+        <p style="font-size: 13px; color: #444; margin: 0;">Available upon request</p>
+    </div>
+</div>"""
+                    generated["cv"] = cv_html
 
                 elif doc_type == "cover_letter":
-                    role = job_title or "an available position"
+                    role = job_title or (job_prefs.get("roles", "").split(",")[0].strip() if isinstance(job_prefs, dict) and job_prefs.get("roles") else "an available position")
                     company = employer or "your organisation"
-                    skills_text = ", ".join(str(s) for s in skills[:5]) if skills else "a strong work ethic"
+                    industry = job_prefs.get("industry", "") if isinstance(job_prefs, dict) else ""
 
-                    lines = [
-                        f"{name}",
-                        f"{student.phone or ''}",
-                        f"{student.email or ''}",
-                        f"{student.suburb or ''} {student.postcode or ''}".strip(),
-                        "",
-                        today_str,
-                        "",
-                        f"Re: Application for {role}",
-                        "",
-                        f"Dear Hiring Manager,",
-                        "",
-                        f"I am writing to express my interest in {role} at {company}. "
-                        f"I am a motivated and reliable worker with experience in "
-                        f"{work_exp[0].get('title', 'various roles') if work_exp else 'various roles'}.",
-                        "",
-                        f"I bring {skills_text} to any role. "
-                        + (f"Most recently, I worked as {work_exp[0].get('title', '')} "
-                           f"at {work_exp[0].get('employer', '')} for {work_exp[0].get('duration', '')}. "
-                           if work_exp else "")
-                        + f"I am a native {lang_name} speaker with "
-                        f"{student.english_level or 'basic'} English.",
-                        "",
-                        f"I am available to work "
-                        + (", ".join(
-                            k for k, v in availability.items()
-                            if v and k not in ("notes",)
-                        ) if availability else "flexible hours")
-                        + f" and travel by {sess.transport or 'public transport'}.",
-                        "",
-                        f"I would welcome the opportunity to discuss how I can contribute "
-                        f"to your team. Thank you for considering my application.",
-                        "",
-                        f"Yours sincerely,",
-                        f"{name}",
-                    ]
-                    generated["cover_letter"] = "\n".join(lines)
+                    # Build richer cover letter content
+                    exp_para = ""
+                    if work_exp:
+                        first = work_exp[0]
+                        exp_para = (
+                            f"In my most recent role as a {first.get('title', 'professional')} at "
+                            f"{first.get('employer', 'my previous employer')}, I gained {first.get('duration', 'significant')} "
+                            f"of practical experience that has equipped me with a solid foundation in "
+                            f"{industry.lower() or 'this field'}."
+                        )
+                        if len(work_exp) > 1:
+                            second = work_exp[-1]
+                            exp_para += (
+                                f" I have also worked as a {second.get('title', '')} at {second.get('employer', '')}, "
+                                f"where I further developed my customer service and teamwork skills."
+                            )
+
+                    skills_text = ", ".join(str(s) for s in skills[:5]) if skills else "a strong work ethic"
+                    add_info = sess.additional_info or ""
+                    goals_text = ""
+                    if "goal" in add_info.lower() or "become" in add_info.lower():
+                        goals_text = f"I am particularly motivated by my long-term aspiration to advance in the {industry.lower() or 'hospitality'} industry. "
+
+                    avail_items = []
+                    if availability:
+                        if availability.get("mornings"): avail_items.append("mornings")
+                        if availability.get("afternoons"): avail_items.append("afternoons")
+                        if availability.get("evenings"): avail_items.append("evenings")
+                        if availability.get("weekends"): avail_items.append("weekends")
+                    avail_text = ", ".join(avail_items) if avail_items else "flexible hours"
+
+                    cl_html = f"""<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; color: #1a1a1a; line-height: 1.7; font-size: 14px;">
+    <div style="margin-bottom: 24px;">
+        <strong>{name}</strong><br>
+        {(student.phone + "<br>") if student.phone else ""}
+        {(student.email + "<br>") if student.email else ""}
+        {(student.suburb or "") + (" " + student.postcode if student.postcode else "")}
+    </div>
+
+    <div style="margin-bottom: 20px;">{today_str}</div>
+
+    <div style="margin-bottom: 20px;">
+        <strong>Re: Application for {role}</strong>
+    </div>
+
+    <p>Dear Hiring Manager,</p>
+
+    <p>I am writing to express my strong interest in the position of {role} at {company}. As a dedicated and reliable professional with hands-on experience in the {industry.lower() or 'hospitality'} sector, I am confident that I would make a valuable contribution to your team.</p>
+
+    {"<p>" + exp_para + "</p>" if exp_para else ""}
+
+    <p>Among my key strengths, I bring {skills_text}. I am a native {lang_name} speaker with {student.english_level or 'developing'} English language skills, and I am actively enrolled in an English language programme to continue improving my communication abilities.</p>
+
+    <p>{goals_text}I am available to work {avail_text} and can travel by {sess.transport or 'public transport'}, giving me the flexibility to meet the scheduling needs of your business.</p>
+
+    <p>I would welcome the opportunity to discuss how my skills and experience align with the needs of your team. Thank you for taking the time to consider my application. I look forward to hearing from you.</p>
+
+    <p style="margin-top: 30px;">Yours sincerely,</p>
+    <p><strong>{name}</strong></p>
+</div>"""
+                    generated["cover_letter"] = cl_html
 
                 elif doc_type == "summary_internal":
-                    lines = [
-                        f"{'=' * 50}",
-                        f"INTERNAL MEETING SUMMARY",
-                        f"{'=' * 50}",
-                        "",
-                        f"Student: {name} (ID: {student.student_id})",
-                        f"Date: {today_str}",
-                        f"Session: #{sess.session_number}",
-                        f"Preferred Language: {lang_name}",
-                        f"English Level: {student.english_level or 'Not assessed'}",
-                        "",
-                        "BACKGROUND",
-                        "-" * 30,
-                    ]
+                    work_rows = ""
                     if work_exp:
-                        lines.append("Work history:")
                         for job in work_exp:
-                            lines.append(
-                                f"  - {job.get('title', 'N/A')} at "
-                                f"{job.get('employer', 'N/A')} ({job.get('duration', 'N/A')})"
-                            )
-                    if education:
-                        lines.append("Education:")
-                        for ed in education:
-                            lines.append(
-                                f"  - {ed.get('qualification', 'N/A')} at "
-                                f"{ed.get('institution', 'N/A')}"
-                            )
-                    if skills:
-                        lines.append(f"Skills: {', '.join(str(s) for s in skills)}")
-                    if certificates:
-                        lines.append(f"Certificates: {', '.join(str(c) for c in certificates)}")
-                    lines.append("")
+                            work_rows += f'<tr><td style="padding: 4px 8px; font-size: 13px;">{job.get("title", "N/A")}</td><td style="padding: 4px 8px; font-size: 13px;">{job.get("employer", "N/A")}</td><td style="padding: 4px 8px; font-size: 13px;">{job.get("duration", "N/A")}</td></tr>'
 
-                    lines.append("JOB PREFERENCES")
-                    lines.append("-" * 30)
+                    edu_list = ""
+                    if education:
+                        items = "".join(f'<li>{ed.get("qualification", "N/A")} at {ed.get("institution", "N/A")} ({ed.get("year", "")})</li>' for ed in education)
+                        edu_list = f'<ul style="margin: 4px 0 0 18px; padding: 0; font-size: 13px;">{items}</ul>'
+
+                    skills_text = ", ".join(str(s) for s in skills) if skills else "Not recorded"
+                    certs_text = ", ".join(str(c) for c in certificates) if certificates else "None recorded"
+
+                    prefs_html = ""
                     if isinstance(job_prefs, dict):
                         for k, v in job_prefs.items():
-                            lines.append(f"  {k}: {v}")
-                    lines.append("")
+                            prefs_html += f'<div style="font-size: 13px; margin-bottom: 2px;"><strong>{k.replace("_", " ").title()}:</strong> {v}</div>'
 
-                    lines.append("AVAILABILITY & TRANSPORT")
-                    lines.append("-" * 30)
+                    avail_parts = []
                     if availability:
-                        avail_parts = [k for k, v in availability.items() if v]
-                        lines.append(f"  Available: {', '.join(avail_parts)}")
-                    lines.append(f"  Transport: {sess.transport or 'Not specified'}")
-                    lines.append("")
+                        avail_parts = [k.title() for k, v in availability.items() if v and k != "notes"]
 
-                    if sess.additional_info:
-                        lines.append("ADDITIONAL NOTES")
-                        lines.append("-" * 30)
-                        lines.append(f"  {sess.additional_info}")
-                        lines.append("")
-
+                    transcript_html = ""
                     if sess.transcript_english:
-                        lines.append("TRANSCRIPT (English)")
-                        lines.append("-" * 30)
-                        lines.append(sess.transcript_english)
-                        lines.append("")
+                        transcript_html = f'''<div style="margin-bottom: 16px;">
+                            <h3 style="font-size: 14px; color: #1B4F72; margin: 0 0 6px 0;">Transcript (English)</h3>
+                            <div style="background: #f8f9fa; padding: 12px; border-radius: 4px; font-size: 12px; color: #444; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">{sess.transcript_english}</div>
+                        </div>'''
 
-                    lines.append(f"Generated: {today_str}")
-                    generated["summary_internal"] = "\n".join(lines)
+                    internal_html = f"""<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 700px; margin: 0 auto; color: #1a1a1a; line-height: 1.5;">
+    <div style="background: #1B4F72; color: white; padding: 14px 20px; border-radius: 6px 6px 0 0;">
+        <h2 style="margin: 0; font-size: 18px;">Internal Meeting Summary</h2>
+        <div style="font-size: 13px; opacity: 0.9; margin-top: 4px;">Confidential &mdash; For staff use only</div>
+    </div>
+    <div style="border: 1px solid #dee2e6; border-top: none; padding: 20px; border-radius: 0 0 6px 6px;">
+        <table style="width: 100%; font-size: 13px; margin-bottom: 16px;">
+            <tr><td style="padding: 3px 0; width: 140px;"><strong>Student:</strong></td><td>{name} (ID: {student.student_id})</td></tr>
+            <tr><td style="padding: 3px 0;"><strong>Date:</strong></td><td>{today_str}</td></tr>
+            <tr><td style="padding: 3px 0;"><strong>Session:</strong></td><td>#{sess.session_number}</td></tr>
+            <tr><td style="padding: 3px 0;"><strong>Language:</strong></td><td>{lang_name}</td></tr>
+            <tr><td style="padding: 3px 0;"><strong>English Level:</strong></td><td>{student.english_level or 'Not assessed'}</td></tr>
+        </table>
+
+        {"" if not work_exp else f'''<div style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; color: #1B4F72; margin: 0 0 6px 0;">Work History</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr style="background: #f0f0f0;"><th style="padding: 6px 8px; text-align: left; font-size: 13px;">Role</th><th style="padding: 6px 8px; text-align: left; font-size: 13px;">Employer</th><th style="padding: 6px 8px; text-align: left; font-size: 13px;">Duration</th></tr>
+                {work_rows}
+            </table>
+        </div>'''}
+
+        {"" if not education else f'''<div style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; color: #1B4F72; margin: 0 0 6px 0;">Education</h3>
+            {edu_list}
+        </div>'''}
+
+        <div style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; color: #1B4F72; margin: 0 0 6px 0;">Skills</h3>
+            <div style="font-size: 13px;">{skills_text}</div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; color: #1B4F72; margin: 0 0 6px 0;">Certificates</h3>
+            <div style="font-size: 13px;">{certs_text}</div>
+        </div>
+
+        {"" if not prefs_html else f'''<div style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; color: #1B4F72; margin: 0 0 6px 0;">Job Preferences</h3>
+            {prefs_html}
+        </div>'''}
+
+        <div style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; color: #1B4F72; margin: 0 0 6px 0;">Availability &amp; Transport</h3>
+            <div style="font-size: 13px;">Available: {", ".join(avail_parts) if avail_parts else "Not specified"}</div>
+            <div style="font-size: 13px;">Transport: {sess.transport or 'Not specified'}</div>
+        </div>
+
+        {"" if not sess.additional_info else f'''<div style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; color: #1B4F72; margin: 0 0 6px 0;">Additional Notes</h3>
+            <div style="font-size: 13px;">{sess.additional_info}</div>
+        </div>'''}
+
+        {transcript_html}
+
+        <div style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 8px;">Generated: {today_str}</div>
+    </div>
+</div>"""
+                    generated["summary_internal"] = internal_html
 
                 elif doc_type == "summary_student":
-                    lines = [
-                        f"{'=' * 50}",
-                        f"YOUR MEETING SUMMARY",
-                        f"{'=' * 50}",
-                        "",
-                        f"Hello {student.first_name}!",
-                        "",
-                        f"Thank you for meeting with us on {today_str}. "
-                        f"Here is a summary of what we discussed.",
-                        "",
-                        "WHAT WE TALKED ABOUT",
-                        "-" * 30,
-                    ]
+                    work_list = ""
                     if work_exp:
-                        lines.append("Your work experience:")
-                        for job in work_exp:
-                            lines.append(
-                                f"  - {job.get('title', '')} at {job.get('employer', '')}"
-                            )
-                    if skills:
-                        lines.append(f"Your skills: {', '.join(str(s) for s in skills)}")
-                    if education:
-                        lines.append("Your education:")
-                        for ed in education:
-                            lines.append(
-                                f"  - {ed.get('qualification', '')} at {ed.get('institution', '')}"
-                            )
-                    lines.append("")
+                        items = "".join(f'<li>{job.get("title", "")} at {job.get("employer", "")}</li>' for job in work_exp)
+                        work_list = f'<ul style="margin: 4px 0 10px 18px; padding: 0; font-size: 14px;">{items}</ul>'
 
-                    lines.append("WHAT WE WILL DO NEXT")
-                    lines.append("-" * 30)
-                    lines.append("  - We will prepare your CV")
-                    lines.append("  - We will help you look for suitable jobs")
-                    if job_prefs:
+                    skills_text = ", ".join(str(s) for s in skills) if skills else ""
+                    edu_list = ""
+                    if education:
+                        items = "".join(f'<li>{ed.get("qualification", "")} at {ed.get("institution", "")}</li>' for ed in education)
+                        edu_list = f'<ul style="margin: 4px 0 10px 18px; padding: 0; font-size: 14px;">{items}</ul>'
+
+                    next_steps = '<ul style="margin: 4px 0 10px 18px; padding: 0; font-size: 14px;">'
+                    next_steps += "<li>We will prepare your CV for you</li>"
+                    next_steps += "<li>We will help you search for suitable jobs</li>"
+                    if job_prefs and isinstance(job_prefs, dict):
                         roles = job_prefs.get("roles", "")
                         if roles:
-                            lines.append(f"  - We will focus on: {roles}")
-                    lines.append("")
-                    lines.append(
-                        "If you have any questions, please contact us. "
-                        "We are here to help!"
-                    )
-                    lines.append("")
-                    lines.append(f"Generated: {today_str}")
-                    generated["summary_student"] = "\n".join(lines)
+                            next_steps += f"<li>We will focus on roles such as: {roles}</li>"
+                    next_steps += "<li>We will arrange a follow-up meeting to check your progress</li>"
+                    next_steps += "</ul>"
+
+                    student_html = f"""<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; color: #1a1a1a; line-height: 1.6; font-size: 14px;">
+    <div style="background: #27AE60; color: white; padding: 16px 20px; border-radius: 6px 6px 0 0;">
+        <h2 style="margin: 0; font-size: 18px;">Your Meeting Summary</h2>
+    </div>
+    <div style="border: 1px solid #dee2e6; border-top: none; padding: 20px; border-radius: 0 0 6px 6px;">
+        <p>Hello <strong>{student.first_name}</strong>!</p>
+
+        <p>Thank you for meeting with us on <strong>{today_str}</strong>. Here is a summary of what we discussed during our conversation.</p>
+
+        {"" if not work_exp else f'''<h3 style="font-size: 15px; color: #27AE60; margin: 16px 0 6px 0;">Your Work Experience</h3>
+        {work_list}'''}
+
+        {"" if not skills_text else f'''<h3 style="font-size: 15px; color: #27AE60; margin: 16px 0 6px 0;">Your Skills</h3>
+        <p>{skills_text}</p>'''}
+
+        {"" if not education else f'''<h3 style="font-size: 15px; color: #27AE60; margin: 16px 0 6px 0;">Your Education</h3>
+        {edu_list}'''}
+
+        <h3 style="font-size: 15px; color: #27AE60; margin: 16px 0 6px 0;">What We Will Do Next</h3>
+        {next_steps}
+
+        <div style="background: #f0faf4; border-left: 4px solid #27AE60; padding: 12px 16px; margin-top: 16px; border-radius: 0 4px 4px 0;">
+            <strong>Need help?</strong> If you have any questions, please do not hesitate to contact us. We are here to help you!
+        </div>
+
+        <div style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 8px; margin-top: 16px;">Generated: {today_str}</div>
+    </div>
+</div>"""
+                    generated["summary_student"] = student_html
 
                 elif doc_type == "action_items":
-                    lines = [
-                        f"{'=' * 50}",
-                        f"ACTION ITEMS",
-                        f"{'=' * 50}",
-                        "",
-                        f"Student: {name}",
-                        f"Date: {today_str}",
-                        "",
-                        "FOR STAFF",
-                        "-" * 30,
-                        "  [ ] Finalise CV and have student review",
-                        "  [ ] Search for suitable job openings",
+                    staff_items = [
+                        "Finalise CV and have student review it",
+                        "Search for suitable job openings",
                     ]
-                    if job_prefs:
+                    if job_prefs and isinstance(job_prefs, dict):
                         roles = job_prefs.get("roles", "")
                         if roles:
-                            lines.append(f"      (Focus areas: {roles})")
-                    lines.append("  [ ] Prepare cover letter template")
-                    lines.append("  [ ] Schedule follow-up meeting")
-                    lines.append("")
-                    lines.append("FOR STUDENT")
-                    lines.append("-" * 30)
-                    lines.append("  [ ] Review CV draft")
-                    lines.append("  [ ] Gather any missing documents or references")
+                            staff_items.append(f"Focus job search on: {roles}")
+                    staff_items.append("Prepare tailored cover letter template")
+                    staff_items.append("Schedule follow-up meeting within 2 weeks")
+                    if certificates:
+                        staff_items.append("Verify certificates and arrange copies")
+
+                    student_items = [
+                        "Review your CV draft when we send it to you",
+                        "Gather any missing documents or references",
+                    ]
                     if not certificates:
-                        lines.append("  [ ] Look into relevant certificates or training")
-                    lines.append("  [ ] Continue English language studies")
-                    lines.append("")
-                    lines.append(f"Generated: {today_str}")
-                    generated["action_items"] = "\n".join(lines)
+                        student_items.append("Look into relevant certificates or training (e.g., Food Safety)")
+                    student_items.append("Continue English language studies")
+                    student_items.append("Let us know if your availability or contact details change")
+
+                    staff_checks = "".join(f'<div style="margin-bottom: 6px; font-size: 14px;"><input type="checkbox" style="margin-right: 8px;" disabled> {item}</div>' for item in staff_items)
+                    student_checks = "".join(f'<div style="margin-bottom: 6px; font-size: 14px;"><input type="checkbox" style="margin-right: 8px;" disabled> {item}</div>' for item in student_items)
+
+                    action_html = f"""<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; color: #1a1a1a; line-height: 1.5;">
+    <div style="background: #E67E22; color: white; padding: 14px 20px; border-radius: 6px 6px 0 0;">
+        <h2 style="margin: 0; font-size: 18px;">Action Items</h2>
+        <div style="font-size: 13px; opacity: 0.9; margin-top: 4px;">{name} &mdash; {today_str}</div>
+    </div>
+    <div style="border: 1px solid #dee2e6; border-top: none; padding: 20px; border-radius: 0 0 6px 6px;">
+        <h3 style="font-size: 15px; color: #E67E22; margin: 0 0 10px 0;">For Staff</h3>
+        {staff_checks}
+
+        <h3 style="font-size: 15px; color: #E67E22; margin: 20px 0 10px 0;">For Student</h3>
+        {student_checks}
+
+        <div style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 8px; margin-top: 16px;">Generated: {today_str}</div>
+    </div>
+</div>"""
+                    generated["action_items"] = action_html
 
             except Exception as doc_err:
                 generated[doc_type] = f"Error generating document: {doc_err}"
