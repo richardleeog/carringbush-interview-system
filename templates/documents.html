@@ -170,7 +170,7 @@
 
 {% block scripts %}
 <script>
-    const studentId = '{{ student.student_id }}';
+    const studentId = {{ student.id }};
     const sessionId = '{{ session.id }}';
     const form = document.getElementById('document-form');
     const generateBtn = document.getElementById('generate-btn');
