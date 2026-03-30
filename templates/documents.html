@@ -161,8 +161,8 @@
         </div>
 
         <div class="results-actions">
-            <button id="print-btn" class="btn btn-secondary">🖨 Print All Documents</button>
-            <button id="email-btn" class="btn btn-secondary">✉ Email to Student</button>
+            <button id="print-btn" class="btn btn-secondary">Print All</button>
+            <button id="download-all-btn" class="btn btn-primary">Download All</button>
         </div>
     </section>
 </div>
@@ -172,31 +172,26 @@
 <script>
     const studentId = {{ student.id }};
     const sessionId = '{{ session.id }}';
+    const studentName = '{{ student.first_name }} {{ student.surname }}';
+    const studentSid = '{{ student.student_id }}';
     const form = document.getElementById('document-form');
     const generateBtn = document.getElementById('generate-btn');
     const resultsSection = document.getElementById('results-section');
     const documentsList = document.getElementById('documents-list');
     const coverLetterCheck = document.getElementById('cover-letter-check');
     const coverLetterFields = document.getElementById('cover-letter-fields');
-    const printBtn = document.getElementById('print-btn');
-    const emailBtn = document.getElementById('email-btn');
 
     let generatedDocuments = {};
 
-    // Show/hide optional fields for cover letter
+    // Show/hide cover letter fields
     coverLetterCheck.addEventListener('change', () => {
-        if (coverLetterCheck.checked) {
-            coverLetterFields.style.display = 'block';
-        } else {
-            coverLetterFields.style.display = 'none';
-        }
+        coverLetterFields.style.display = coverLetterCheck.checked ? 'block' : 'none';
     });
 
     // Form submission
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        // Get selected documents
         const selectedDocuments = Array.from(
             document.querySelectorAll('input[name="documents"]:checked')
         ).map(cb => cb.value);
@@ -206,7 +201,6 @@
             return;
         }
 
-        // Collect form data
         const formData = {
             session_id: sessionId,
             documents: selectedDocuments,
@@ -230,7 +224,6 @@
             generatedDocuments = data.documents;
             displayDocuments(data.documents);
 
-            // Show results
             resultsSection.style.display = 'block';
             resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -239,11 +232,11 @@
             alert(`Error: ${error.message}`);
         } finally {
             generateBtn.disabled = false;
-            generateBtn.textContent = '✓ Generate Selected Documents';
+            generateBtn.textContent = '\u2713 Generate Selected Documents';
         }
     });
 
-    // Display generated documents
+    // Display generated documents with preview and download
     function displayDocuments(documents) {
         documentsList.innerHTML = '';
 
@@ -251,19 +244,21 @@
             const docName = getDocumentName(docType);
             const docDiv = document.createElement('div');
             docDiv.className = 'document-result';
+            docDiv.style.cssText = 'margin-bottom: 2rem; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;';
 
             docDiv.innerHTML = `
-                <div class="document-header">
-                    <h3>${docName}</h3>
+                <div style="background: #1B4F72; color: white; padding: 0.8rem 1.2rem; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 1.1rem;">${docName}</h3>
                     <button
                         type="button"
-                        class="btn btn-small btn-secondary"
-                        onclick="downloadDocument('${docType}', '${docName}')">
-                        ⬇ Download
+                        class="btn btn-small"
+                        style="background: white; color: #1B4F72; border: none; padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold;"
+                        onclick="downloadDocument('${docType}')">
+                        Download
                     </button>
                 </div>
-                <div class="document-preview">
-                    ${escapeHtml(content)}
+                <div style="padding: 1.2rem; background: #fafafa; max-height: 400px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; color: #333;">
+${escapeHtml(content)}
                 </div>
             `;
 
@@ -271,7 +266,7 @@
         }
     }
 
-    // Get friendly document name
+    // Document names
     function getDocumentName(docType) {
         const names = {
             'cv': 'Curriculum Vitae',
@@ -283,59 +278,58 @@
         return names[docType] || docType;
     }
 
-    // Download document
-    function downloadDocument(docType, docName) {
+    // Download single document
+    function downloadDocument(docType) {
         const content = generatedDocuments[docType];
         if (!content) return;
 
-        const blob = new Blob([content], { type: 'text/plain' });
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${docType}_{{ student.student_id }}.txt`;
+        a.download = `${getDocumentName(docType).replace(/\s+/g, '_')}_${studentSid}.txt`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
     }
 
+    // Download all documents as separate files
+    document.getElementById('download-all-btn').addEventListener('click', () => {
+        for (const docType of Object.keys(generatedDocuments)) {
+            downloadDocument(docType);
+        }
+    });
+
     // Print all documents
-    printBtn.addEventListener('click', () => {
+    document.getElementById('print-btn').addEventListener('click', () => {
         const printWindow = window.open('', '', 'width=900,height=700');
-        const printContent = document.querySelector('.documents-list').innerHTML;
+        let printContent = '';
+
+        for (const [docType, content] of Object.entries(generatedDocuments)) {
+            printContent += `
+                <div style="page-break-after: always; margin-bottom: 2cm;">
+                    <h2 style="color: #1B4F72; border-bottom: 2px solid #1B4F72; padding-bottom: 0.5rem;">
+                        ${getDocumentName(docType)}
+                    </h2>
+                    <pre style="white-space: pre-wrap; word-wrap: break-word; font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.6;">
+${escapeHtml(content)}
+                    </pre>
+                </div>
+            `;
+        }
 
         printWindow.document.write(`
             <html>
                 <head>
-                    <title>{{ student.first_name }} {{ student.surname }} - Documents</title>
+                    <title>${studentName} - Documents</title>
                     <style>
-                        body {
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                            margin: 2cm;
-                            line-height: 1.6;
-                            color: #333;
-                        }
-                        .document-result {
-                            margin-bottom: 3cm;
-                            page-break-inside: avoid;
-                        }
-                        .document-header {
-                            border-bottom: 2px solid #1B4F72;
-                            margin-bottom: 1rem;
-                            padding-bottom: 0.5rem;
-                        }
-                        .document-header h3 {
-                            margin: 0 0 0.5rem 0;
-                            color: #1B4F72;
-                        }
-                        .document-preview {
-                            white-space: pre-wrap;
-                            word-wrap: break-word;
-                        }
+                        body { font-family: Arial, sans-serif; margin: 2cm; color: #333; }
+                        @media print { div { page-break-after: always; } }
                     </style>
                 </head>
                 <body>
-                    <h1>{{ student.first_name }} {{ student.surname }}</h1>
+                    <h1 style="color: #1B4F72;">${studentName}</h1>
                     <p>Generated on ${new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
                     ${printContent}
                 </body>
@@ -344,17 +338,6 @@
 
         printWindow.document.close();
         printWindow.print();
-    });
-
-    // Email documents (simplified)
-    emailBtn.addEventListener('click', () => {
-        const email = '{{ student.email }}';
-        if (!email) {
-            alert('Student does not have an email address on file.');
-            return;
-        }
-
-        alert(`Documents would be emailed to ${email}. This feature would be implemented with a backend email service.`);
     });
 
     // Utility

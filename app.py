@@ -396,51 +396,298 @@ def generate_documents(student_id):
         if not sess:
             return jsonify({"success": False, "error": "Session not found"}), 404
 
-        # Build transcript data dict for document generator
-        transcript_data = {
-            "english_text": sess.transcript_english or "",
-            "original_text": sess.transcript_original or "",
-            "work_experience": json.loads(sess.work_experience) if sess.work_experience else [],
-            "education": json.loads(sess.education) if sess.education else [],
-            "skills": json.loads(sess.skills) if sess.skills else [],
-            "job_preferences": json.loads(sess.job_preferences) if sess.job_preferences else {},
-            "certificates": json.loads(sess.certificates) if sess.certificates else [],
-            "availability": json.loads(sess.availability) if sess.availability else {},
-            "transport": sess.transport or "",
-            "additional_info": sess.additional_info or "",
-            "language": student.preferred_language,
-        }
+        # Parse stored JSON fields
+        work_exp = json.loads(sess.work_experience) if sess.work_experience else []
+        education = json.loads(sess.education) if sess.education else []
+        skills = json.loads(sess.skills) if sess.skills else []
+        job_prefs = json.loads(sess.job_preferences) if sess.job_preferences else {}
+        certificates = json.loads(sess.certificates) if sess.certificates else []
+        availability = json.loads(sess.availability) if sess.availability else {}
 
-        sd = _student_dict(student)
+        name = f"{student.first_name} {student.surname}"
+        lang_name = Config.SUPPORTED_LANGUAGES.get(
+            student.preferred_language, student.preferred_language
+        )
+        today_str = date.today().strftime("%d %B %Y")
+
         generated = {}
 
         for doc_type in doc_types:
             try:
                 if doc_type == "cv":
-                    path = document_generator.generate_cv(sd, transcript_data)
-                    generated["cv"] = path
+                    lines = [
+                        f"{'=' * 50}",
+                        f"CURRICULUM VITAE",
+                        f"{'=' * 50}",
+                        "",
+                        f"{name.upper()}",
+                        "",
+                    ]
+                    contact = []
+                    if student.phone:
+                        contact.append(f"Phone: {student.phone}")
+                    if student.email:
+                        contact.append(f"Email: {student.email}")
+                    if student.suburb:
+                        contact.append(
+                            f"Location: {student.suburb}"
+                            + (f" {student.postcode}" if student.postcode else "")
+                        )
+                    lines.extend(contact)
+                    lines.append("")
+
+                    lines.append("PROFESSIONAL SUMMARY")
+                    lines.append("-" * 30)
+                    lines.append(
+                        f"Motivated and reliable worker seeking employment in "
+                        f"Melbourne. Speaks {lang_name} and English. "
+                        + (sess.additional_info or "Eager to contribute to a team environment.")
+                    )
+                    lines.append("")
+
+                    if work_exp:
+                        lines.append("WORK EXPERIENCE")
+                        lines.append("-" * 30)
+                        for job in work_exp:
+                            t = job.get("title", "Role")
+                            e = job.get("employer", "Employer")
+                            d = job.get("duration", "")
+                            lines.append(f"  {t}  |  {e}  |  {d}")
+                        lines.append("")
+
+                    if skills:
+                        lines.append("KEY SKILLS")
+                        lines.append("-" * 30)
+                        if isinstance(skills, list):
+                            lines.append("  " + "  |  ".join(str(s) for s in skills))
+                        lines.append("")
+
+                    if education:
+                        lines.append("EDUCATION & TRAINING")
+                        lines.append("-" * 30)
+                        for ed in education:
+                            inst = ed.get("institution", "")
+                            qual = ed.get("qualification", "")
+                            yr = ed.get("year", "")
+                            lines.append(f"  {qual}  |  {inst}  |  {yr}")
+                        lines.append("")
+
+                    if certificates:
+                        lines.append("CERTIFICATES")
+                        lines.append("-" * 30)
+                        for cert in certificates:
+                            lines.append(f"  - {cert}")
+                        lines.append("")
+
+                    lines.append("LANGUAGES")
+                    lines.append("-" * 30)
+                    lines.append(f"  {lang_name}: Native speaker")
+                    lines.append(f"  English: {student.english_level or 'Basic'}")
+                    lines.append("")
+
+                    if sess.transport:
+                        lines.append("TRANSPORT")
+                        lines.append("-" * 30)
+                        lines.append(f"  {sess.transport}")
+                        lines.append("")
+
+                    lines.append("REFERENCES")
+                    lines.append("-" * 30)
+                    lines.append("  Available upon request")
+                    lines.append("")
+                    lines.append(f"Generated: {today_str}")
+
+                    generated["cv"] = "\n".join(lines)
+
                 elif doc_type == "cover_letter":
-                    path = document_generator.generate_cover_letter(
-                        sd, transcript_data, job_title, employer
-                    )
-                    generated["cover_letter"] = path
+                    role = job_title or "an available position"
+                    company = employer or "your organisation"
+                    skills_text = ", ".join(str(s) for s in skills[:5]) if skills else "a strong work ethic"
+
+                    lines = [
+                        f"{name}",
+                        f"{student.phone or ''}",
+                        f"{student.email or ''}",
+                        f"{student.suburb or ''} {student.postcode or ''}".strip(),
+                        "",
+                        today_str,
+                        "",
+                        f"Re: Application for {role}",
+                        "",
+                        f"Dear Hiring Manager,",
+                        "",
+                        f"I am writing to express my interest in {role} at {company}. "
+                        f"I am a motivated and reliable worker with experience in "
+                        f"{work_exp[0].get('title', 'various roles') if work_exp else 'various roles'}.",
+                        "",
+                        f"I bring {skills_text} to any role. "
+                        + (f"Most recently, I worked as {work_exp[0].get('title', '')} "
+                           f"at {work_exp[0].get('employer', '')} for {work_exp[0].get('duration', '')}. "
+                           if work_exp else "")
+                        + f"I am a native {lang_name} speaker with "
+                        f"{student.english_level or 'basic'} English.",
+                        "",
+                        f"I am available to work "
+                        + (", ".join(
+                            k for k, v in availability.items()
+                            if v and k not in ("notes",)
+                        ) if availability else "flexible hours")
+                        + f" and travel by {sess.transport or 'public transport'}.",
+                        "",
+                        f"I would welcome the opportunity to discuss how I can contribute "
+                        f"to your team. Thank you for considering my application.",
+                        "",
+                        f"Yours sincerely,",
+                        f"{name}",
+                    ]
+                    generated["cover_letter"] = "\n".join(lines)
+
                 elif doc_type == "summary_internal":
-                    path = document_generator.generate_meeting_summary_internal(
-                        sd, transcript_data
-                    )
-                    generated["summary_internal"] = path
+                    lines = [
+                        f"{'=' * 50}",
+                        f"INTERNAL MEETING SUMMARY",
+                        f"{'=' * 50}",
+                        "",
+                        f"Student: {name} (ID: {student.student_id})",
+                        f"Date: {today_str}",
+                        f"Session: #{sess.session_number}",
+                        f"Preferred Language: {lang_name}",
+                        f"English Level: {student.english_level or 'Not assessed'}",
+                        "",
+                        "BACKGROUND",
+                        "-" * 30,
+                    ]
+                    if work_exp:
+                        lines.append("Work history:")
+                        for job in work_exp:
+                            lines.append(
+                                f"  - {job.get('title', 'N/A')} at "
+                                f"{job.get('employer', 'N/A')} ({job.get('duration', 'N/A')})"
+                            )
+                    if education:
+                        lines.append("Education:")
+                        for ed in education:
+                            lines.append(
+                                f"  - {ed.get('qualification', 'N/A')} at "
+                                f"{ed.get('institution', 'N/A')}"
+                            )
+                    if skills:
+                        lines.append(f"Skills: {', '.join(str(s) for s in skills)}")
+                    if certificates:
+                        lines.append(f"Certificates: {', '.join(str(c) for c in certificates)}")
+                    lines.append("")
+
+                    lines.append("JOB PREFERENCES")
+                    lines.append("-" * 30)
+                    if isinstance(job_prefs, dict):
+                        for k, v in job_prefs.items():
+                            lines.append(f"  {k}: {v}")
+                    lines.append("")
+
+                    lines.append("AVAILABILITY & TRANSPORT")
+                    lines.append("-" * 30)
+                    if availability:
+                        avail_parts = [k for k, v in availability.items() if v]
+                        lines.append(f"  Available: {', '.join(avail_parts)}")
+                    lines.append(f"  Transport: {sess.transport or 'Not specified'}")
+                    lines.append("")
+
+                    if sess.additional_info:
+                        lines.append("ADDITIONAL NOTES")
+                        lines.append("-" * 30)
+                        lines.append(f"  {sess.additional_info}")
+                        lines.append("")
+
+                    if sess.transcript_english:
+                        lines.append("TRANSCRIPT (English)")
+                        lines.append("-" * 30)
+                        lines.append(sess.transcript_english)
+                        lines.append("")
+
+                    lines.append(f"Generated: {today_str}")
+                    generated["summary_internal"] = "\n".join(lines)
+
                 elif doc_type == "summary_student":
-                    path = document_generator.generate_meeting_summary_student(
-                        sd, transcript_data
+                    lines = [
+                        f"{'=' * 50}",
+                        f"YOUR MEETING SUMMARY",
+                        f"{'=' * 50}",
+                        "",
+                        f"Hello {student.first_name}!",
+                        "",
+                        f"Thank you for meeting with us on {today_str}. "
+                        f"Here is a summary of what we discussed.",
+                        "",
+                        "WHAT WE TALKED ABOUT",
+                        "-" * 30,
+                    ]
+                    if work_exp:
+                        lines.append("Your work experience:")
+                        for job in work_exp:
+                            lines.append(
+                                f"  - {job.get('title', '')} at {job.get('employer', '')}"
+                            )
+                    if skills:
+                        lines.append(f"Your skills: {', '.join(str(s) for s in skills)}")
+                    if education:
+                        lines.append("Your education:")
+                        for ed in education:
+                            lines.append(
+                                f"  - {ed.get('qualification', '')} at {ed.get('institution', '')}"
+                            )
+                    lines.append("")
+
+                    lines.append("WHAT WE WILL DO NEXT")
+                    lines.append("-" * 30)
+                    lines.append("  - We will prepare your CV")
+                    lines.append("  - We will help you look for suitable jobs")
+                    if job_prefs:
+                        roles = job_prefs.get("roles", "")
+                        if roles:
+                            lines.append(f"  - We will focus on: {roles}")
+                    lines.append("")
+                    lines.append(
+                        "If you have any questions, please contact us. "
+                        "We are here to help!"
                     )
-                    generated["summary_student"] = path
+                    lines.append("")
+                    lines.append(f"Generated: {today_str}")
+                    generated["summary_student"] = "\n".join(lines)
+
                 elif doc_type == "action_items":
-                    path = document_generator.generate_action_items(
-                        sd, transcript_data
-                    )
-                    generated["action_items"] = path
+                    lines = [
+                        f"{'=' * 50}",
+                        f"ACTION ITEMS",
+                        f"{'=' * 50}",
+                        "",
+                        f"Student: {name}",
+                        f"Date: {today_str}",
+                        "",
+                        "FOR STAFF",
+                        "-" * 30,
+                        "  [ ] Finalise CV and have student review",
+                        "  [ ] Search for suitable job openings",
+                    ]
+                    if job_prefs:
+                        roles = job_prefs.get("roles", "")
+                        if roles:
+                            lines.append(f"      (Focus areas: {roles})")
+                    lines.append("  [ ] Prepare cover letter template")
+                    lines.append("  [ ] Schedule follow-up meeting")
+                    lines.append("")
+                    lines.append("FOR STUDENT")
+                    lines.append("-" * 30)
+                    lines.append("  [ ] Review CV draft")
+                    lines.append("  [ ] Gather any missing documents or references")
+                    if not certificates:
+                        lines.append("  [ ] Look into relevant certificates or training")
+                    lines.append("  [ ] Continue English language studies")
+                    lines.append("")
+                    lines.append(f"Generated: {today_str}")
+                    generated["action_items"] = "\n".join(lines)
+
             except Exception as doc_err:
-                generated[doc_type] = f"Error: {doc_err}"
+                generated[doc_type] = f"Error generating document: {doc_err}"
 
         # Record which docs were generated
         sess.documents_generated = json.dumps(list(generated.keys()))
