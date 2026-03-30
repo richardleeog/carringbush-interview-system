@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Interview - {{ student.first_name }} {{ student.surname }} - Multilingual Interview System{% endblock %}
+{% block title %}Interview - {{ student.first_name }} {{ student.surname }} - Student Interaction Register{% endblock %}
 
 {% block content %}
 <div class="interview-container">
@@ -10,7 +10,7 @@
             <h1>{{ student.first_name }} {{ student.surname }}</h1>
             <div class="header-meta">
                 <span class="meta-item">ID: {{ student.student_id }}</span>
-                <span class="meta-item">Language: {{ student.preferred_language }}</span>
+                <span class="meta-item">Language: {{ student.preferred_language|upper }}</span>
                 <span class="meta-item">English Level: {{ student.english_level }}</span>
             </div>
         </div>
@@ -33,34 +33,47 @@
                     <button id="stop-btn" class="btn btn-large btn-danger recording-btn" disabled style="display: none;">
                         &#9632; Stop Recording
                     </button>
-                    <button id="demo-btn" class="btn btn-large recording-btn" style="background-color: #8E44AD; color: white;">
+                    <button id="demo-btn" class="btn btn-large recording-btn" style="background-color: var(--cb-magenta); color: white;">
                         &#9654; Run Demo
                     </button>
+                </div>
+
+                <!-- Speaker toggle for real recording mode -->
+                <div id="speaker-toggle" style="display:none; margin-top:1rem;">
+                    <p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:0.5rem;">Who is speaking?</p>
+                    <div style="display:flex; gap:0.5rem; justify-content:center;">
+                        <button id="speaker-interviewer" class="btn btn-small" style="background:var(--cb-blue);color:white;" onclick="setSpeaker('interviewer')">
+                            Interviewer (English)
+                        </button>
+                        <button id="speaker-student" class="btn btn-small" style="background:var(--cb-orange);color:white;opacity:0.5;" onclick="setSpeaker('student')">
+                            Student ({{ student.preferred_language|upper }})
+                        </button>
+                    </div>
                 </div>
 
                 <div id="recording-timer" class="recording-timer">00:00</div>
             </section>
 
-            <!-- Transcript Display -->
+            <!-- Transcript Display — unified conversation view -->
             <section class="transcript-section">
                 <div class="transcript-header">
-                    <h2>Live Transcript</h2>
+                    <h2>Live Conversation</h2>
                 </div>
 
                 <div class="transcript-container">
-                    <!-- Original Language View -->
+                    <!-- Left: Student's language view -->
                     <div class="transcript-view original-view">
-                        <div class="transcript-label">{{ student.preferred_language }}</div>
+                        <div class="transcript-label">{{ student.preferred_language|upper }}</div>
                         <div id="transcript-original" class="transcript-text">
-                            Transcript will appear here as you speak...
+                            Conversation will appear here...
                         </div>
                     </div>
 
-                    <!-- Translation View -->
+                    <!-- Right: English view -->
                     <div class="transcript-view translation-view">
-                        <div class="transcript-label">English (Translation)</div>
+                        <div class="transcript-label">English</div>
                         <div id="transcript-translation" class="transcript-text">
-                            Translation will appear here...
+                            English translation will appear here...
                         </div>
                     </div>
                 </div>
@@ -68,10 +81,10 @@
                 <!-- Transcript Controls -->
                 <div class="transcript-controls">
                     <button id="mark-sensitive-btn" class="btn btn-secondary" title="Mark current section as sensitive">
-                        🔒 Mark as Sensitive
+                        Mark as Sensitive
                     </button>
                     <button id="clear-transcript-btn" class="btn btn-secondary" title="Clear transcript and start over">
-                        🗑 Clear Transcript
+                        Clear Transcript
                     </button>
                 </div>
             </section>
@@ -79,7 +92,7 @@
             <!-- End Interview -->
             <section class="interview-actions">
                 <button id="end-interview-btn" class="btn btn-large btn-primary" disabled>
-                    End Interview & Generate Documents
+                    End Interview &amp; Generate Documents
                 </button>
                 <a href="{{ url_for('student_profile', student_id=student.id) }}" class="btn btn-large btn-secondary">
                     Cancel
@@ -91,7 +104,7 @@
         <aside class="interview-sidebar">
             <div class="guide-container">
                 <button id="toggle-guide" class="btn btn-secondary btn-small" style="width: 100%; margin-bottom: 1rem;">
-                    ▼ Interview Guide
+                    &#9660; Interview Guide
                 </button>
 
                 <div id="guide-content" class="guide-content" style="display: block;">
@@ -108,7 +121,7 @@
                         </div>
 
                         <div class="guide-topic">
-                            <h4>Skills & Abilities</h4>
+                            <h4>Skills &amp; Abilities</h4>
                             <ul>
                                 <li>What technical skills do you have?</li>
                                 <li>What soft skills are you strong in?</li>
@@ -148,16 +161,48 @@
         </aside>
     </div>
 </div>
+
+<style>
+    /* Speaker message bubbles */
+    .msg-bubble {
+        padding: 0.6rem 0.9rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        opacity: 0;
+        transition: opacity 0.5s;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+    .msg-bubble.visible { opacity: 1; }
+    .msg-interviewer {
+        background: #E8F4FD;
+        border-left: 3px solid #0077C8;
+    }
+    .msg-student {
+        background: #FFF3E8;
+        border-left: 3px solid #FF6900;
+    }
+    .msg-speaker {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 0.2rem;
+    }
+    .msg-interviewer .msg-speaker { color: #0077C8; }
+    .msg-student .msg-speaker { color: #FF6900; }
+</style>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
     // =========================================================================
-    // Interview Recording & Transcription System (with Demo Mode)
+    // Interview Recording & Transcription — Two-Way Conversation
     // =========================================================================
 
     const studentId = {{ student.id }};
     const studentLanguage = '{{ student.preferred_language }}';
+    const studentLangName = '{{ student.preferred_language|upper }}';
     const startBtn = document.getElementById('start-btn');
     const stopBtn = document.getElementById('stop-btn');
     const demoBtn = document.getElementById('demo-btn');
@@ -169,6 +214,7 @@
     const guideContent = document.getElementById('guide-content');
     const clearTranscriptBtn = document.getElementById('clear-transcript-btn');
     const markSensitiveBtn = document.getElementById('mark-sensitive-btn');
+    const speakerToggle = document.getElementById('speaker-toggle');
 
     let mediaRecorder = null;
     let audioChunks = [];
@@ -178,76 +224,167 @@
     let recordingStartTime = null;
     let timerInterval = null;
     let currentTranscript = [];
+    let currentSpeaker = 'interviewer'; // 'interviewer' or 'student'
+
+    function setSpeaker(who) {
+        currentSpeaker = who;
+        document.getElementById('speaker-interviewer').style.opacity = who === 'interviewer' ? '1' : '0.5';
+        document.getElementById('speaker-student').style.opacity = who === 'student' ? '1' : '0.5';
+    }
 
     // =========================================================================
-    // Demo Mode — Sample Interview Data
+    // Add a message bubble to both transcript columns
+    // =========================================================================
+
+    function addMessage(speaker, langText, englishText) {
+        const originalView = document.getElementById('transcript-original');
+        const translationView = document.getElementById('transcript-translation');
+
+        if (originalView.textContent.includes('will appear here')) originalView.innerHTML = '';
+        if (translationView.textContent.includes('will appear here')) translationView.innerHTML = '';
+
+        const speakerLabel = speaker === 'interviewer' ? 'Interviewer' : 'Student';
+        const cssClass = speaker === 'interviewer' ? 'msg-interviewer' : 'msg-student';
+
+        // Left column — student's language
+        const leftBubble = document.createElement('div');
+        leftBubble.className = `msg-bubble ${cssClass}`;
+        leftBubble.innerHTML = `<div class="msg-speaker">${speakerLabel}</div>${escapeHtml(langText)}`;
+        originalView.appendChild(leftBubble);
+        originalView.scrollTop = originalView.scrollHeight;
+        requestAnimationFrame(() => leftBubble.classList.add('visible'));
+
+        // Right column — English
+        const rightBubble = document.createElement('div');
+        rightBubble.className = `msg-bubble ${cssClass}`;
+        rightBubble.innerHTML = `<div class="msg-speaker">${speakerLabel}</div>${escapeHtml(englishText)}`;
+        translationView.appendChild(rightBubble);
+        translationView.scrollTop = translationView.scrollHeight;
+        requestAnimationFrame(() => rightBubble.classList.add('visible'));
+
+        // Store
+        currentTranscript.push({
+            speaker: speaker,
+            original: langText,
+            english: englishText,
+            timestamp: new Date().toISOString(),
+            sensitive: false
+        });
+    }
+
+    // =========================================================================
+    // Demo Mode — Two-Way Sample Interview
     // =========================================================================
 
     const DEMO_CONVERSATION = [
+        // Interviewer speaks English, translated to Vietnamese for student
         {
-            original: "Xin chao. Ten toi la Thanh Nguyen.",
-            english: "Hello. My name is Thanh Nguyen.",
-            pause: 2000
+            speaker: 'interviewer',
+            english: "Hello Thanh, welcome. Thank you for coming today. Can you tell me a little about yourself?",
+            lang: "Xin chao Thanh, chao mung ban. Cam on ban da den hom nay. Ban co the cho toi biet doi chut ve ban than khong?",
+            pause: 3000
         },
+        // Student speaks Vietnamese, translated to English for interviewer
         {
-            original: "Toi da song o Melbourne duoc ba nam roi.",
-            english: "I have been living in Melbourne for three years now.",
-            pause: 2500
-        },
-        {
-            original: "O Viet Nam, toi da lam bep trong nha hang duoc nam nam.",
-            english: "In Vietnam, I worked as a cook in a restaurant for five years.",
+            speaker: 'student',
+            english: "Hello. My name is Thanh Nguyen. I have been living in Melbourne for three years now.",
+            lang: "Xin chao. Ten toi la Thanh Nguyen. Toi da song o Melbourne duoc ba nam roi.",
             pause: 3000
         },
         {
-            original: "Toi co the nau cac mon An, Viet Nam, Thai va Trung Quoc.",
-            english: "I can cook Vietnamese, Thai, Chinese and Western dishes.",
+            speaker: 'interviewer',
+            english: "That's great. Can you tell me about your work experience? What jobs have you had before?",
+            lang: "Rat tot. Ban co the cho toi biet ve kinh nghiem lam viec cua ban khong? Ban da lam nhung cong viec gi truoc day?",
+            pause: 3000
+        },
+        {
+            speaker: 'student',
+            english: "In Vietnam, I worked as a cook in a restaurant for five years. I can cook Vietnamese, Thai, Chinese and Western dishes.",
+            lang: "O Viet Nam, toi da lam bep trong nha hang duoc nam nam. Toi co the nau cac mon Viet Nam, Thai, Trung Quoc va mon Tay.",
+            pause: 3500
+        },
+        {
+            speaker: 'interviewer',
+            english: "Excellent! And have you worked anywhere here in Melbourne?",
+            lang: "Tuyet voi! Va ban da lam viec o dau o Melbourne chua?",
             pause: 2500
         },
         {
-            original: "Toi cung da lam phuc vu ban o mot quan ca phe o Richmond.",
-            english: "I have also worked as a waiter at a cafe in Richmond.",
+            speaker: 'student',
+            english: "I have also worked as a waiter at a cafe in Richmond for about one year.",
+            lang: "Toi cung da lam phuc vu ban o mot quan ca phe o Richmond duoc khoang mot nam.",
             pause: 2500
         },
         {
-            original: "Toi co chung chi ve sinh an toan thuc pham.",
+            speaker: 'interviewer',
+            english: "Do you have any certificates or qualifications related to food or hospitality?",
+            lang: "Ban co chung chi hoac bang cap nao lien quan den thuc pham hoac nganh khach san khong?",
+            pause: 3000
+        },
+        {
+            speaker: 'student',
             english: "I have a food safety and hygiene certificate.",
+            lang: "Toi co chung chi ve sinh an toan thuc pham.",
             pause: 2000
         },
         {
-            original: "Toi muon tim viec lam trong bep hoac nha hang.",
-            english: "I would like to find work in a kitchen or restaurant.",
+            speaker: 'interviewer',
+            english: "What kind of work are you looking for now?",
+            lang: "Bay gio ban dang tim kiem loai cong viec gi?",
             pause: 2500
         },
         {
-            original: "Toi co the lam viec buoi sang, buoi chieu va cuoi tuan.",
-            english: "I can work mornings, afternoons and weekends.",
-            pause: 2000
+            speaker: 'student',
+            english: "I would like to find work in a kitchen or restaurant. I can work mornings, afternoons and weekends.",
+            lang: "Toi muon tim viec lam trong bep hoac nha hang. Toi co the lam viec buoi sang, buoi chieu va cuoi tuan.",
+            pause: 3000
         },
         {
-            original: "Toi di lam bang xe buyt va xe lua.",
+            speaker: 'interviewer',
+            english: "And how do you get to work? Do you drive or use public transport?",
+            lang: "Va ban di lam bang cach nao? Ban lai xe hay di phuong tien cong cong?",
+            pause: 2500
+        },
+        {
+            speaker: 'student',
             english: "I travel to work by bus and train.",
+            lang: "Toi di lam bang xe buyt va xe lua.",
             pause: 2000
         },
         {
-            original: "Toi cham chi va luon dung gio. Toi thich lam viec nhom.",
-            english: "I am hardworking and always on time. I enjoy working in a team.",
-            pause: 2500
+            speaker: 'interviewer',
+            english: "Tell me a bit about yourself as a worker. What would an employer say about you?",
+            lang: "Hay cho toi biet doi chut ve ban nhu mot nguoi lam viec. Nha tuyen dung se noi gi ve ban?",
+            pause: 3000
         },
         {
-            original: "Toi da hoc tieng Anh o AMES Australia duoc mot nam.",
-            english: "I have been studying English at AMES Australia for one year.",
-            pause: 2500
+            speaker: 'student',
+            english: "I am hardworking and always on time. I enjoy working in a team. I have been studying English at AMES Australia for one year.",
+            lang: "Toi cham chi va luon dung gio. Toi thich lam viec nhom. Toi da hoc tieng Anh o AMES Australia duoc mot nam.",
+            pause: 3500
         },
         {
-            original: "Muc tieu cua toi la tro thanh bep truong trong tuong lai.",
+            speaker: 'interviewer',
+            english: "And what are your goals for the future?",
+            lang: "Va muc tieu cua ban trong tuong lai la gi?",
+            pause: 2000
+        },
+        {
+            speaker: 'student',
             english: "My goal is to become a head chef in the future.",
+            lang: "Muc tieu cua toi la tro thanh bep truong trong tuong lai.",
             pause: 2500
+        },
+        {
+            speaker: 'interviewer',
+            english: "That's wonderful, Thanh. Thank you for sharing all of that. We will prepare your CV and help you look for suitable positions.",
+            lang: "Tuyet voi lam, Thanh. Cam on ban da chia se tat ca nhung dieu do. Chung toi se chuan bi CV cho ban va giup ban tim nhung vi tri phu hop.",
+            pause: 3500
         }
     ];
 
     // =========================================================================
-    // Demo Mode — Run Simulated Interview
+    // Demo Mode — Run Simulated Two-Way Interview
     // =========================================================================
 
     async function runDemo() {
@@ -271,7 +408,7 @@
         recordingStartTime = Date.now();
         recordingDot.classList.add('recording');
         recordingLabel.textContent = 'Demo in progress...';
-        recordingLabel.style.color = '#8E44AD';
+        recordingLabel.style.color = '#A51890';
         startBtn.style.display = 'none';
         demoBtn.style.display = 'none';
         endInterviewBtn.disabled = false;
@@ -282,48 +419,32 @@
         originalView.innerHTML = '';
         translationView.innerHTML = '';
 
-        // Play through demo conversation with realistic delays
+        // Play through two-way demo conversation with realistic delays
         for (let i = 0; i < DEMO_CONVERSATION.length; i++) {
             if (!isDemoRunning) break;
 
             const entry = DEMO_CONVERSATION[i];
 
-            // Show "listening" indicator
-            recordingLabel.textContent = 'Listening...';
+            // Show status
+            if (entry.speaker === 'interviewer') {
+                recordingLabel.textContent = 'Interviewer speaking...';
+            } else {
+                recordingLabel.textContent = 'Student speaking...';
+            }
 
             await sleep(entry.pause);
             if (!isDemoRunning) break;
 
-            // Show original text (simulating transcription appearing)
             recordingLabel.textContent = 'Transcribing...';
-            const origP = document.createElement('p');
-            origP.style.opacity = '0';
-            origP.style.transition = 'opacity 0.5s';
-            origP.textContent = entry.original;
-            originalView.appendChild(origP);
-            originalView.scrollTop = originalView.scrollHeight;
-            requestAnimationFrame(() => { origP.style.opacity = '1'; });
-
-            await sleep(800);
+            await sleep(600);
             if (!isDemoRunning) break;
 
-            // Show translation
             recordingLabel.textContent = 'Translating...';
-            const transP = document.createElement('p');
-            transP.style.opacity = '0';
-            transP.style.transition = 'opacity 0.5s';
-            transP.textContent = entry.english;
-            translationView.appendChild(transP);
-            translationView.scrollTop = translationView.scrollHeight;
-            requestAnimationFrame(() => { transP.style.opacity = '1'; });
+            await sleep(500);
+            if (!isDemoRunning) break;
 
-            // Store in transcript
-            currentTranscript.push({
-                original: entry.original,
-                english: entry.english,
-                timestamp: new Date().toISOString(),
-                sensitive: false
-            });
+            // Add the message to both columns
+            addMessage(entry.speaker, entry.lang, entry.english);
 
             recordingLabel.textContent = 'Demo in progress...';
         }
@@ -331,8 +452,8 @@
         // Demo finished
         if (isDemoRunning) {
             recordingDot.classList.remove('recording');
-            recordingLabel.textContent = 'Demo complete — click "End Interview" to generate documents';
-            recordingLabel.style.color = '#27AE60';
+            recordingLabel.textContent = 'Demo complete \u2014 click "End Interview" to generate documents';
+            recordingLabel.style.color = '#00A651';
             if (timerInterval) clearInterval(timerInterval);
         }
     }
@@ -371,6 +492,7 @@
             stopBtn.style.display = 'block';
             stopBtn.disabled = false;
             endInterviewBtn.disabled = false;
+            speakerToggle.style.display = 'block';
             startTimer();
 
         } catch (error) {
@@ -388,12 +510,13 @@
             recordingLabel.textContent = 'Recording paused';
             startBtn.style.display = 'block';
             stopBtn.style.display = 'none';
+            speakerToggle.style.display = 'none';
             if (timerInterval) clearInterval(timerInterval);
         }
     }
 
     // =========================================================================
-    // Audio Upload & Transcription (real mode)
+    // Audio Upload & Transcription (real mode) — with two-way translation
     // =========================================================================
 
     async function uploadAudioChunk() {
@@ -424,47 +547,48 @@
             });
             const data = await response.json();
             if (!data.success) throw new Error(data.error);
-            updateTranscriptDisplay(data.transcript);
-            if (studentLanguage !== 'en') { translateTranscript(data.transcript); }
+
+            const transcribedText = data.transcript;
+
+            if (currentSpeaker === 'interviewer') {
+                // Interviewer spoke English → translate to student's language
+                const translated = await translateText(transcribedText, 'en', studentLanguage);
+                addMessage('interviewer', translated, transcribedText);
+            } else {
+                // Student spoke their language → translate to English
+                const translated = await translateText(transcribedText, studentLanguage, 'en');
+                addMessage('student', transcribedText, translated);
+            }
         } catch (error) {
             console.error('Error transcribing audio:', error);
         }
     }
 
-    async function translateTranscript(text) {
+    async function translateText(text, sourceLang, targetLang) {
+        if (sourceLang === targetLang) return text;
         try {
             const response = await fetch('/api/translate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, source_language: studentLanguage, target_language: 'en' })
+                body: JSON.stringify({ text, source_language: sourceLang, target_language: targetLang })
             });
             const data = await response.json();
             if (!data.success) throw new Error(data.error);
-            document.getElementById('transcript-translation').innerHTML +=
-                `<p>${escapeHtml(data.translated_text)}</p>`;
+            return data.translated_text;
         } catch (error) {
-            console.error('Error translating text:', error);
+            console.error('Translation error:', error);
+            return text; // fallback to original
         }
     }
 
     // =========================================================================
-    // Transcript Display
+    // Transcript Display utilities
     // =========================================================================
-
-    function updateTranscriptDisplay(transcript) {
-        const originalView = document.getElementById('transcript-original');
-        if (originalView.textContent.includes('will appear here')) { originalView.innerHTML = ''; }
-        originalView.innerHTML += `<p>${escapeHtml(transcript)}</p>`;
-        currentTranscript.push({
-            original: transcript, english: transcript,
-            timestamp: new Date().toISOString(), sensitive: false
-        });
-    }
 
     function clearTranscript() {
         if (confirm('Are you sure you want to clear the transcript? This cannot be undone.')) {
-            document.getElementById('transcript-original').innerHTML = 'Transcript will appear here as you speak...';
-            document.getElementById('transcript-translation').innerHTML = 'Translation will appear here...';
+            document.getElementById('transcript-original').innerHTML = 'Conversation will appear here...';
+            document.getElementById('transcript-translation').innerHTML = 'English translation will appear here...';
             currentTranscript = [];
         }
     }

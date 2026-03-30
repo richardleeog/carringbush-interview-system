@@ -1,1 +1,1 @@
-from .database import db, Student, InterviewSession, generate_student_id
+from .database import db, Student, InterviewSession, DocumentRecord, generate_student_id

@@ -1,5 +1,5 @@
 """
-Multilingual Interview and Document Preparation System.
+Student Interaction Register — Carringbush Adult Education.
 A Flask web application that helps non-English-speaking job seekers
 create professional CVs through recorded, translated interviews.
 """
@@ -13,7 +13,7 @@ from flask import (Flask, render_template, request, jsonify, redirect,
                    url_for, flash, send_from_directory, send_file)
 from werkzeug.utils import secure_filename
 
-from models import db, Student, InterviewSession, generate_student_id
+from models import db, Student, InterviewSession, DocumentRecord, generate_student_id
 from services.transcription import TranscriptionService
 from services.translation import TranslationService
 from services.document_gen import DocumentGenerator
@@ -104,12 +104,53 @@ def dashboard():
     languages_supported = len(Config.SUPPORTED_LANGUAGES)
     recent_students = Student.query.order_by(Student.updated_at.desc()).limit(10).all()
 
+    # Total documents generated
+    total_documents = DocumentRecord.query.count()
+
+    # All document records for the documents table, most recent first
+    all_documents = (
+        DocumentRecord.query
+        .order_by(DocumentRecord.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    # Build student status summaries
+    student_statuses = {}
+    for s in recent_students:
+        docs = DocumentRecord.query.filter_by(student_id=s.id).all()
+        sess_count = len(s.sessions)
+        doc_count = len(docs)
+        if doc_count > 0:
+            submitted = [d for d in docs if d.status == "submitted"]
+            shared = [d for d in docs if d.status == "shared_with_student"]
+            if submitted:
+                status = "Submitted"
+                status_class = "status-submitted"
+            elif shared:
+                status = "Shared"
+                status_class = "status-shared"
+            else:
+                status = "Docs generated"
+                status_class = "status-generated"
+        elif sess_count > 0:
+            status = "Interview done"
+            status_class = "status-interview"
+        else:
+            status = "Registered"
+            status_class = "status-registered"
+        student_statuses[s.id] = {"status": status, "class": status_class, "doc_count": doc_count}
+
     return render_template(
         "dashboard.html",
         total_students=total_students,
         sessions_this_week=sessions_this_week,
         languages_supported=languages_supported,
+        total_documents=total_documents,
         recent_students=recent_students,
+        all_documents=all_documents,
+        student_statuses=student_statuses,
+        lang_map=Config.SUPPORTED_LANGUAGES,
     )
 
 
@@ -895,11 +936,583 @@ def generate_documents(student_id):
 
         # Record which docs were generated
         sess.documents_generated = json.dumps(list(generated.keys()))
+
+        # Create DocumentRecord entries for tracking
+        for doc_type_key in generated:
+            if doc_type_key.startswith("Error"):
+                continue
+            # Avoid duplicates if regenerating
+            existing = DocumentRecord.query.filter_by(
+                student_id=student.id, session_id=sess.id, doc_type=doc_type_key
+            ).first()
+            if not existing:
+                rec = DocumentRecord(
+                    student_id=student.id,
+                    session_id=sess.id,
+                    doc_type=doc_type_key,
+                    status="generated",
+                )
+                db.session.add(rec)
+
         db.session.commit()
 
         return jsonify({"success": True, "documents": generated})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# PDF download – converts HTML document content to a printable PDF
+# ---------------------------------------------------------------------------
+
+@app.route("/interview/<int:student_id>/download-pdf", methods=["POST"])
+def download_pdf(student_id):
+    """Convert generated HTML document content to a downloadable PDF."""
+    try:
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.colors import HexColor
+        from reportlab.lib.units import mm
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+            HRFlowable, KeepTogether
+        )
+
+        data = request.get_json()
+        doc_type = data.get("doc_type", "cv")
+        student = Student.query.get_or_404(student_id)
+        session_id = data.get("session_id")
+        sess = InterviewSession.query.get(session_id) if session_id else None
+
+        if not sess:
+            return jsonify({"error": "Session not found"}), 404
+
+        # Parse stored JSON fields
+        work_exp = json.loads(sess.work_experience) if sess.work_experience else []
+        education = json.loads(sess.education) if sess.education else []
+        skills = json.loads(sess.skills) if sess.skills else []
+        job_prefs = json.loads(sess.job_preferences) if sess.job_preferences else {}
+        certificates = json.loads(sess.certificates) if sess.certificates else []
+        availability = json.loads(sess.availability) if sess.availability else {}
+
+        name = f"{student.first_name} {student.surname}"
+        lang_name = Config.SUPPORTED_LANGUAGES.get(
+            student.preferred_language, student.preferred_language
+        )
+        today_str = date.today().strftime("%d %B %Y")
+        job_title = data.get("job_title", "")
+        employer = data.get("employer", "")
+
+        # Colour palette
+        BLUE = HexColor("#1B4F72")
+        LIGHT_BLUE = HexColor("#2E86C1")
+        GREEN = HexColor("#27AE60")
+        ORANGE = HexColor("#E67E22")
+        GREY = HexColor("#555555")
+        DARK = HexColor("#1a1a1a")
+
+        # Custom styles
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle(
+            "DocName", parent=styles["Title"], fontSize=20,
+            textColor=BLUE, alignment=1, spaceAfter=4, spaceBefore=0
+        ))
+        styles.add(ParagraphStyle(
+            "ContactLine", parent=styles["Normal"], fontSize=10,
+            textColor=GREY, alignment=1, spaceAfter=8
+        ))
+        styles.add(ParagraphStyle(
+            "SectionHead", parent=styles["Heading2"], fontSize=12,
+            textColor=BLUE, spaceBefore=14, spaceAfter=6,
+            borderWidth=0, leading=16
+        ))
+        styles.add(ParagraphStyle(
+            "BodyText2", parent=styles["Normal"], fontSize=10,
+            textColor=DARK, leading=14, spaceAfter=4
+        ))
+        styles.add(ParagraphStyle(
+            "JobTitle", parent=styles["Normal"], fontSize=11,
+            textColor=DARK, leading=14, fontName="Helvetica-Bold"
+        ))
+        styles.add(ParagraphStyle(
+            "JobMeta", parent=styles["Normal"], fontSize=10,
+            textColor=GREY, leading=12, spaceAfter=2
+        ))
+        styles.add(ParagraphStyle(
+            "Bullet", parent=styles["Normal"], fontSize=10,
+            textColor=DARK, leading=13, leftIndent=16,
+            bulletIndent=6, spaceAfter=2
+        ))
+        styles.add(ParagraphStyle(
+            "SmallGrey", parent=styles["Normal"], fontSize=8,
+            textColor=GREY, spaceBefore=16
+        ))
+
+        buf = BytesIO()
+        doc = SimpleDocTemplate(
+            buf, pagesize=A4,
+            leftMargin=22 * mm, rightMargin=22 * mm,
+            topMargin=20 * mm, bottomMargin=20 * mm
+        )
+        story = []
+
+        # Role descriptions for CV
+        role_descriptions = {
+            "cook": [
+                "Prepared a wide range of dishes to a high standard, ensuring consistent quality and presentation",
+                "Managed food preparation schedules, ingredient ordering, and stock rotation",
+                "Maintained strict food safety and hygiene standards in accordance with local regulations",
+                "Collaborated with kitchen team to develop daily specials and seasonal menus",
+                "Trained junior kitchen staff on preparation techniques and workplace safety procedures",
+            ],
+            "waiter": [
+                "Provided attentive and friendly table service to guests in a fast-paced dining environment",
+                "Accurately took customer orders and communicated dietary requirements to kitchen staff",
+                "Handled point-of-sale transactions, cash handling, and end-of-shift reconciliation",
+                "Maintained a clean and welcoming dining area, setting tables and managing reservations",
+                "Built positive relationships with regular customers, contributing to repeat business",
+            ],
+            "kitchen hand": [
+                "Supported kitchen operations including food preparation, cleaning, and dishwashing",
+                "Ensured all work areas met hygiene and safety requirements at all times",
+                "Assisted chefs with ingredient preparation, portioning, and plating",
+                "Managed stock rotation and proper storage of perishable goods",
+            ],
+            "cleaner": [
+                "Maintained cleanliness across commercial and residential properties to a high standard",
+                "Operated cleaning equipment and handled chemical supplies safely",
+                "Followed detailed cleaning schedules and reported maintenance issues promptly",
+            ],
+        }
+
+        if doc_type == "cv":
+            # Header
+            story.append(Paragraph(name.upper(), styles["DocName"]))
+            contact_parts = []
+            if student.phone:
+                contact_parts.append(student.phone)
+            if student.email:
+                contact_parts.append(student.email)
+            location = ""
+            if student.suburb:
+                location = student.suburb + (f" {student.postcode}" if student.postcode else "")
+                contact_parts.append(location)
+            if contact_parts:
+                story.append(Paragraph(" &bull; ".join(contact_parts), styles["ContactLine"]))
+            story.append(HRFlowable(width="100%", thickness=2, color=BLUE, spaceAfter=10))
+
+            # Professional Summary
+            add_info = sess.additional_info or ""
+            goals = ""
+            traits = ""
+            if add_info:
+                parts = [p.strip() for p in add_info.replace(". ", ".|").split("|") if p.strip()]
+                for p in parts:
+                    if any(kw in p.lower() for kw in ["goal", "aspir", "become"]):
+                        goals = p.rstrip(".")
+                    else:
+                        traits = p.rstrip(".")
+
+            industry = job_prefs.get("industry", "hospitality") if isinstance(job_prefs, dict) else "hospitality"
+            summary_parts = [
+                f"Dedicated and dependable professional with a strong background in the {industry} industry."
+            ]
+            if work_exp:
+                summary_parts.append(
+                    f"Brings {work_exp[0].get('duration', '')} of hands-on experience as a "
+                    f"{work_exp[0].get('title', 'professional')}"
+                    + (f", complemented by {work_exp[-1].get('duration', '')} in a "
+                       f"{work_exp[-1].get('title', '').lower()} role" if len(work_exp) > 1 else "")
+                    + "."
+                )
+            summary_parts.append(
+                f"Fluent {lang_name} speaker with {student.english_level or 'developing'} English, "
+                f"currently enrolled in language studies to strengthen workplace communication."
+            )
+            if traits:
+                summary_parts.append(f"{traits}.")
+            if goals:
+                summary_parts.append(f"Career aspiration: {goals.lower().replace('goal:', '').replace('goal', '').strip()}.")
+
+            story.append(Paragraph("PROFESSIONAL SUMMARY", styles["SectionHead"]))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+            story.append(Paragraph(" ".join(summary_parts), styles["BodyText2"]))
+
+            # Work Experience
+            if work_exp:
+                story.append(Paragraph("WORK EXPERIENCE", styles["SectionHead"]))
+                story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+                for job in work_exp:
+                    t = job.get("title", "Role")
+                    e = job.get("employer", "Employer")
+                    d = job.get("duration", "")
+                    story.append(Paragraph(f"{t}", styles["JobTitle"]))
+                    story.append(Paragraph(f"{e} &mdash; {d}", styles["JobMeta"]))
+                    descs = []
+                    for key, desc_list in role_descriptions.items():
+                        if key in t.lower():
+                            descs = desc_list
+                            break
+                    if not descs:
+                        descs = [
+                            f"Performed duties as {t} to a reliable and professional standard",
+                            "Worked collaboratively within a team to meet daily operational targets",
+                            "Demonstrated punctuality, commitment, and a positive attitude",
+                        ]
+                    for desc in descs:
+                        story.append(Paragraph(f"&bull; {desc}", styles["Bullet"]))
+                    story.append(Spacer(1, 6))
+
+            # Key Skills
+            if skills:
+                story.append(Paragraph("KEY SKILLS", styles["SectionHead"]))
+                story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+                skill_categories = {}
+                for s in skills:
+                    s_lower = str(s).lower()
+                    if any(kw in s_lower for kw in ["cook", "food", "dish", "cuisine", "kitchen", "preparation"]):
+                        skill_categories.setdefault("Culinary & Food Preparation", []).append(str(s))
+                    elif any(kw in s_lower for kw in ["customer", "service", "team", "communication"]):
+                        skill_categories.setdefault("Customer Service & Teamwork", []).append(str(s))
+                    elif any(kw in s_lower for kw in ["clean", "hygiene", "safety"]):
+                        skill_categories.setdefault("Workplace Health & Safety", []).append(str(s))
+                    else:
+                        skill_categories.setdefault("Professional Skills", []).append(str(s))
+                for cat, cat_skills in skill_categories.items():
+                    story.append(Paragraph(
+                        f"<b>{cat}:</b> {' &bull; '.join(cat_skills)}", styles["BodyText2"]
+                    ))
+
+            # Education
+            if education:
+                story.append(Paragraph("EDUCATION &amp; TRAINING", styles["SectionHead"]))
+                story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+                for ed in education:
+                    story.append(Paragraph(
+                        f"<b>{ed.get('qualification', '')}</b> &mdash; {ed.get('institution', '')} ({ed.get('year', '')})",
+                        styles["BodyText2"]
+                    ))
+
+            # Certificates
+            if certificates:
+                story.append(Paragraph("CERTIFICATES &amp; LICENCES", styles["SectionHead"]))
+                story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+                for cert in certificates:
+                    story.append(Paragraph(f"&bull; {cert}", styles["Bullet"]))
+
+            # Languages
+            story.append(Paragraph("LANGUAGES", styles["SectionHead"]))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+            story.append(Paragraph(f"<b>{lang_name}:</b> Native speaker", styles["BodyText2"]))
+            story.append(Paragraph(
+                f"<b>English:</b> {student.english_level or 'Basic'} &mdash; currently enrolled in English language programme",
+                styles["BodyText2"]
+            ))
+
+            # Availability
+            avail_items = []
+            if availability:
+                if availability.get("mornings"): avail_items.append("Mornings")
+                if availability.get("afternoons"): avail_items.append("Afternoons")
+                if availability.get("evenings"): avail_items.append("Evenings")
+                if availability.get("weekends"): avail_items.append("Weekends")
+            story.append(Paragraph("AVAILABILITY &amp; TRANSPORT", styles["SectionHead"]))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+            story.append(Paragraph(
+                f"<b>Available:</b> {', '.join(avail_items) if avail_items else 'Flexible'}",
+                styles["BodyText2"]
+            ))
+            story.append(Paragraph(
+                f"<b>Transport:</b> {sess.transport or 'Public transport'}",
+                styles["BodyText2"]
+            ))
+
+            # References
+            story.append(Paragraph("REFERENCES", styles["SectionHead"]))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+            story.append(Paragraph("Available upon request", styles["BodyText2"]))
+
+        elif doc_type == "cover_letter":
+            role = job_title or (job_prefs.get("roles", "").split(",")[0].strip() if isinstance(job_prefs, dict) and job_prefs.get("roles") else "an available position")
+            company = employer or "your organisation"
+            industry = job_prefs.get("industry", "") if isinstance(job_prefs, dict) else ""
+
+            # Sender details
+            story.append(Paragraph(f"<b>{name}</b>", styles["BodyText2"]))
+            if student.phone:
+                story.append(Paragraph(student.phone, styles["BodyText2"]))
+            if student.email:
+                story.append(Paragraph(student.email, styles["BodyText2"]))
+            loc = (student.suburb or "") + (" " + student.postcode if student.postcode else "")
+            if loc.strip():
+                story.append(Paragraph(loc.strip(), styles["BodyText2"]))
+            story.append(Spacer(1, 14))
+            story.append(Paragraph(today_str, styles["BodyText2"]))
+            story.append(Spacer(1, 14))
+            story.append(Paragraph(f"<b>Re: Application for {role}</b>", styles["BodyText2"]))
+            story.append(Spacer(1, 10))
+            story.append(Paragraph("Dear Hiring Manager,", styles["BodyText2"]))
+            story.append(Spacer(1, 8))
+
+            story.append(Paragraph(
+                f"I am writing to express my strong interest in the position of {role} at {company}. "
+                f"As a dedicated and reliable professional with hands-on experience in the "
+                f"{industry.lower() or 'hospitality'} sector, I am confident that I would make "
+                f"a valuable contribution to your team.",
+                styles["BodyText2"]
+            ))
+            story.append(Spacer(1, 6))
+
+            if work_exp:
+                first = work_exp[0]
+                exp_text = (
+                    f"In my most recent role as a {first.get('title', 'professional')} at "
+                    f"{first.get('employer', 'my previous employer')}, I gained "
+                    f"{first.get('duration', 'significant')} of practical experience."
+                )
+                if len(work_exp) > 1:
+                    second = work_exp[-1]
+                    exp_text += (
+                        f" I have also worked as a {second.get('title', '')} at "
+                        f"{second.get('employer', '')}, where I further developed my "
+                        f"customer service and teamwork skills."
+                    )
+                story.append(Paragraph(exp_text, styles["BodyText2"]))
+                story.append(Spacer(1, 6))
+
+            skills_text = ", ".join(str(s) for s in skills[:5]) if skills else "a strong work ethic"
+            story.append(Paragraph(
+                f"Among my key strengths, I bring {skills_text}. I am a native {lang_name} "
+                f"speaker with {student.english_level or 'developing'} English language skills, "
+                f"and I am actively enrolled in an English language programme.",
+                styles["BodyText2"]
+            ))
+            story.append(Spacer(1, 6))
+
+            avail_items = []
+            if availability:
+                if availability.get("mornings"): avail_items.append("mornings")
+                if availability.get("afternoons"): avail_items.append("afternoons")
+                if availability.get("evenings"): avail_items.append("evenings")
+                if availability.get("weekends"): avail_items.append("weekends")
+            avail_text = ", ".join(avail_items) if avail_items else "flexible hours"
+            story.append(Paragraph(
+                f"I am available to work {avail_text} and can travel by "
+                f"{sess.transport or 'public transport'}.",
+                styles["BodyText2"]
+            ))
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(
+                "I would welcome the opportunity to discuss how my skills and experience "
+                "align with the needs of your team. Thank you for taking the time to consider "
+                "my application. I look forward to hearing from you.",
+                styles["BodyText2"]
+            ))
+            story.append(Spacer(1, 20))
+            story.append(Paragraph("Yours sincerely,", styles["BodyText2"]))
+            story.append(Spacer(1, 10))
+            story.append(Paragraph(f"<b>{name}</b>", styles["BodyText2"]))
+
+        elif doc_type == "summary_internal":
+            story.append(Paragraph("Internal Meeting Summary", styles["DocName"]))
+            story.append(Paragraph("Confidential &mdash; For staff use only", styles["ContactLine"]))
+            story.append(HRFlowable(width="100%", thickness=2, color=BLUE, spaceAfter=10))
+
+            info_data = [
+                ["Student:", f"{name} (ID: {student.student_id})"],
+                ["Date:", today_str],
+                ["Session:", f"#{sess.session_number}"],
+                ["Language:", lang_name],
+                ["English Level:", student.english_level or "Not assessed"],
+            ]
+            t = Table(info_data, colWidths=[90, 350])
+            t.setStyle(TableStyle([
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 10))
+
+            if work_exp:
+                story.append(Paragraph("Work History", styles["SectionHead"]))
+                story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+                for job in work_exp:
+                    story.append(Paragraph(
+                        f"&bull; {job.get('title', 'N/A')} at {job.get('employer', 'N/A')} ({job.get('duration', 'N/A')})",
+                        styles["Bullet"]
+                    ))
+
+            if education:
+                story.append(Paragraph("Education", styles["SectionHead"]))
+                story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+                for ed in education:
+                    story.append(Paragraph(
+                        f"&bull; {ed.get('qualification', 'N/A')} at {ed.get('institution', 'N/A')} ({ed.get('year', '')})",
+                        styles["Bullet"]
+                    ))
+
+            story.append(Paragraph("Skills", styles["SectionHead"]))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+            story.append(Paragraph(", ".join(str(s) for s in skills) if skills else "Not recorded", styles["BodyText2"]))
+
+            if certificates:
+                story.append(Paragraph("Certificates", styles["SectionHead"]))
+                story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+                story.append(Paragraph(", ".join(str(c) for c in certificates), styles["BodyText2"]))
+
+            if sess.additional_info:
+                story.append(Paragraph("Additional Notes", styles["SectionHead"]))
+                story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#cccccc"), spaceAfter=6))
+                story.append(Paragraph(sess.additional_info, styles["BodyText2"]))
+
+            story.append(Paragraph(f"Generated: {today_str}", styles["SmallGrey"]))
+
+        elif doc_type == "summary_student":
+            story.append(Paragraph("Your Meeting Summary", styles["DocName"]))
+            story.append(HRFlowable(width="100%", thickness=2, color=GREEN, spaceAfter=10))
+            story.append(Paragraph(f"Hello <b>{student.first_name}</b>!", styles["BodyText2"]))
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(
+                f"Thank you for meeting with us on <b>{today_str}</b>. "
+                "Here is a summary of what we discussed.",
+                styles["BodyText2"]
+            ))
+
+            if work_exp:
+                story.append(Paragraph("Your Work Experience", styles["SectionHead"]))
+                for job in work_exp:
+                    story.append(Paragraph(
+                        f"&bull; {job.get('title', '')} at {job.get('employer', '')}",
+                        styles["Bullet"]
+                    ))
+
+            if skills:
+                story.append(Paragraph("Your Skills", styles["SectionHead"]))
+                story.append(Paragraph(", ".join(str(s) for s in skills), styles["BodyText2"]))
+
+            if education:
+                story.append(Paragraph("Your Education", styles["SectionHead"]))
+                for ed in education:
+                    story.append(Paragraph(
+                        f"&bull; {ed.get('qualification', '')} at {ed.get('institution', '')}",
+                        styles["Bullet"]
+                    ))
+
+            story.append(Paragraph("What We Will Do Next", styles["SectionHead"]))
+            next_items = [
+                "We will prepare your CV for you",
+                "We will help you search for suitable jobs",
+                "We will arrange a follow-up meeting",
+            ]
+            if job_prefs and isinstance(job_prefs, dict) and job_prefs.get("roles"):
+                next_items.append(f"We will focus on roles such as: {job_prefs['roles']}")
+            for item in next_items:
+                story.append(Paragraph(f"&bull; {item}", styles["Bullet"]))
+
+            story.append(Spacer(1, 10))
+            story.append(Paragraph(
+                "<b>Need help?</b> If you have any questions, please do not hesitate to contact us. "
+                "We are here to help you!",
+                styles["BodyText2"]
+            ))
+            story.append(Paragraph(f"Generated: {today_str}", styles["SmallGrey"]))
+
+        elif doc_type == "action_items":
+            story.append(Paragraph("Action Items", styles["DocName"]))
+            story.append(Paragraph(f"{name} &mdash; {today_str}", styles["ContactLine"]))
+            story.append(HRFlowable(width="100%", thickness=2, color=ORANGE, spaceAfter=10))
+
+            story.append(Paragraph("FOR STAFF", styles["SectionHead"]))
+            staff_items = [
+                "Finalise CV and have student review it",
+                "Search for suitable job openings",
+            ]
+            if job_prefs and isinstance(job_prefs, dict) and job_prefs.get("roles"):
+                staff_items.append(f"Focus job search on: {job_prefs['roles']}")
+            staff_items += ["Prepare tailored cover letter template", "Schedule follow-up meeting within 2 weeks"]
+            for item in staff_items:
+                story.append(Paragraph(f"&#9744; {item}", styles["Bullet"]))
+
+            story.append(Spacer(1, 10))
+            story.append(Paragraph("FOR STUDENT", styles["SectionHead"]))
+            student_items = [
+                "Review your CV draft when we send it to you",
+                "Gather any missing documents or references",
+            ]
+            if not certificates:
+                student_items.append("Look into relevant certificates or training (e.g., Food Safety)")
+            student_items += ["Continue English language studies", "Let us know if your availability changes"]
+            for item in student_items:
+                story.append(Paragraph(f"&#9744; {item}", styles["Bullet"]))
+
+            story.append(Paragraph(f"Generated: {today_str}", styles["SmallGrey"]))
+
+        # Build PDF
+        doc.build(story)
+        buf.seek(0)
+
+        doc_names = {
+            "cv": "Curriculum_Vitae",
+            "cover_letter": "Cover_Letter",
+            "summary_internal": "Internal_Summary",
+            "summary_student": "Student_Summary",
+            "action_items": "Action_Items",
+        }
+        filename = f"{doc_names.get(doc_type, doc_type)}_{student.student_id}.pdf"
+
+        return send_file(
+            buf, mimetype="application/pdf",
+            as_attachment=True, download_name=filename
+        )
+
+    except ImportError:
+        return jsonify({"error": "PDF generation requires reportlab. Install with: pip install reportlab"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Document tracking & status updates
+# ---------------------------------------------------------------------------
+
+@app.route("/api/documents/<int:doc_id>/status", methods=["POST"])
+def update_document_status(doc_id):
+    """Update the status of a tracked document."""
+    try:
+        rec = DocumentRecord.query.get_or_404(doc_id)
+        data = request.get_json()
+        new_status = data.get("status")
+        valid = list(DocumentRecord.STATUS_LABELS.keys())
+        if new_status not in valid:
+            return jsonify({"error": f"Invalid status. Must be one of: {valid}"}), 400
+
+        rec.status = new_status
+        if new_status == "shared_with_student":
+            rec.shared_date = date.today()
+        elif new_status == "submitted":
+            rec.submitted_date = date.today()
+            rec.submitted_to = data.get("submitted_to", "")
+        if data.get("notes"):
+            rec.notes = data["notes"]
+
+        db.session.commit()
+        return jsonify({"success": True, "document": rec.to_dict()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/documents", methods=["GET"])
+def api_list_documents():
+    """List all document records, optionally filtered by student."""
+    student_id = request.args.get("student_id", type=int)
+    query = DocumentRecord.query
+    if student_id:
+        query = query.filter_by(student_id=student_id)
+    docs = query.order_by(DocumentRecord.created_at.desc()).limit(50).all()
+    return jsonify({"documents": [d.to_dict() for d in docs]})
 
 
 # ---------------------------------------------------------------------------
@@ -927,22 +1540,46 @@ def api_search_students():
     if len(q) < 2:
         return jsonify({"results": []})
 
-    students = Student.query.filter(
-        db.or_(
-            Student.first_name.ilike(f"%{q}%"),
-            Student.surname.ilike(f"%{q}%"),
-            Student.student_id.ilike(f"%{q}%"),
-        )
-    ).limit(10).all()
+    # Build language lookup (both codes and full names) for searching
+    lang_matches = []
+    q_lower = q.lower()
+    for code, name in Config.SUPPORTED_LANGUAGES.items():
+        if q_lower in name.lower() or q_lower in code.lower():
+            lang_matches.append(code)
 
-    return jsonify({
-        "results": [
-            {"id": s.id, "student_id": s.student_id,
-             "name": s.display_name,
-             "language": Config.SUPPORTED_LANGUAGES.get(s.preferred_language, s.preferred_language)}
-            for s in students
-        ]
-    })
+    filters = [
+        Student.first_name.ilike(f"%{q}%"),
+        Student.surname.ilike(f"%{q}%"),
+        Student.student_id.ilike(f"%{q}%"),
+        Student.preferred_language.ilike(f"%{q}%"),
+    ]
+    # Also match by language name → code
+    for code in lang_matches:
+        filters.append(Student.preferred_language == code)
+
+    students = Student.query.filter(db.or_(*filters)).limit(10).all()
+
+    results = []
+    for s in students:
+        lang = Config.SUPPORTED_LANGUAGES.get(s.preferred_language, s.preferred_language)
+        doc_count = DocumentRecord.query.filter_by(student_id=s.id).count()
+        session_count = len(s.sessions)
+        # Determine status
+        if doc_count > 0:
+            latest_doc = DocumentRecord.query.filter_by(student_id=s.id).order_by(
+                DocumentRecord.updated_at.desc()).first()
+            status = latest_doc.status_label if latest_doc else "Generated"
+        elif session_count > 0:
+            status = "Interview done"
+        else:
+            status = "Registered"
+        results.append({
+            "id": s.id, "student_id": s.student_id,
+            "name": s.display_name, "language": lang,
+            "status": status, "doc_count": doc_count,
+        })
+
+    return jsonify({"results": results})
 
 
 @app.route("/api/translate", methods=["POST"])

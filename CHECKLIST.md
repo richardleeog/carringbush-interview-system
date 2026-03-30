@@ -1,4 +1,4 @@
-# Multilingual Interview System - Implementation Checklist
+# Student Interaction Register - Implementation Checklist
 
 ## Core Flask Application
 

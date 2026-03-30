@@ -1,4 +1,4 @@
-# Multilingual Interview System
+# Student Interaction Register
 
 A Flask-based web application designed to help non-English-speaking job seekers in Melbourne create professional CVs through recorded interviews in their preferred language.
 

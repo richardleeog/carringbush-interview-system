@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Multilingual Interview System — Start Script
+# Student Interaction Register — Start Script
 # =============================================================================
 # Just run:   bash start.sh
 # Opens automatically in your browser.
@@ -22,7 +22,7 @@ source venv/bin/activate
 
 echo ""
 echo "=========================================="
-echo "  Multilingual Interview System"
+echo "  Student Interaction Register"
 echo "=========================================="
 echo ""
 

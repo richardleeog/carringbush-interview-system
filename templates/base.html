@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Multilingual Interview System{% endblock %}</title>
+    <title>{% block title %}Student Interaction Register{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block extra_css %}{% endblock %}
 </head>
@@ -12,11 +12,12 @@
         <!-- Navigation Bar -->
         <nav class="navbar">
             <div class="navbar-container">
-                <div class="navbar-logo">
-                    <a href="{{ url_for('dashboard') }}">
-                        <span class="logo-text">Multilingual Interview System</span>
-                    </a>
-                </div>
+                <a href="{{ url_for('dashboard') }}" class="navbar-brand">
+                    <img src="{{ url_for('static', filename='img/carringbush-logo.svg') }}" alt="Carringbush Adult Education" class="navbar-logo-img">
+                    <span class="navbar-titles">
+                        <span class="navbar-app-name">Student Interaction Register</span>
+                    </span>
+                </a>
                 <ul class="navbar-nav">
                     <li><a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a></li>
                     <li><a href="{{ url_for('students_list') }}" class="nav-link">Students</a></li>
@@ -24,6 +25,8 @@
                 </ul>
             </div>
         </nav>
+        <!-- Coloured dot strip -->
+        <div class="navbar-dots"></div>
 
         <!-- Main Content -->
         <main class="main-content">
@@ -48,7 +51,7 @@
         <!-- Footer -->
         <footer class="footer">
             <div class="footer-content">
-                <p>&copy; 2026 Multilingual Interview System. All rights reserved.</p>
+                <p>&copy; 2026 Carringbush Adult Education &mdash; Student Interaction Register</p>
                 <p class="footer-subtitle">Helping job seekers create professional CVs through recorded interviews.</p>
             </div>
         </footer>

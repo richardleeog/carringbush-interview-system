@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Multilingual Interview System{% endblock %}
+{% block title %}Dashboard - Student Interaction Register{% endblock %}
 
 {% block content %}
 <div class="dashboard-container">
     <!-- Welcome Section -->
     <section class="welcome-section">
-        <h1 class="page-title">Welcome to Multilingual Interview System</h1>
-        <p class="welcome-text">Help job seekers create professional CVs through recorded interviews in their preferred language.</p>
+        <h1 class="page-title">Student Interaction Register</h1>
+        <p class="welcome-text">Record interviews, generate professional documents, and track student progress.</p>
         <a href="{{ url_for('student_new_form') }}" class="btn btn-primary btn-large">
             + Register New Student
         </a>
@@ -33,13 +33,17 @@
                 <div class="stat-label">Sessions This Week</div>
             </div>
             <div class="stat-card">
+                <div class="stat-number">{{ total_documents }}</div>
+                <div class="stat-label">Documents Generated</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-number">{{ languages_supported }}</div>
                 <div class="stat-label">Languages Supported</div>
             </div>
         </div>
     </section>
 
-    <!-- Recent Students -->
+    <!-- Recent Students with Status -->
     <section class="recent-students-section">
         <h2 class="section-title">Recent Students</h2>
         {% if recent_students %}
@@ -50,26 +54,35 @@
                             <th>Name</th>
                             <th>Student ID</th>
                             <th>Language</th>
+                            <th>Status</th>
+                            <th>Docs</th>
                             <th>Last Session</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for student in recent_students %}
+                            {% set ss = student_statuses.get(student.id, {}) %}
                             <tr>
-                                <td>{{ student.first_name }} {{ student.surname }}</td>
+                                <td><strong>{{ student.first_name }} {{ student.surname }}</strong></td>
                                 <td class="student-id">{{ student.student_id }}</td>
-                                <td>{{ student.preferred_language }}</td>
+                                <td>{{ lang_map.get(student.preferred_language, student.preferred_language) }}</td>
+                                <td>
+                                    <span class="status-badge {{ ss.get('class', 'status-registered') }}">
+                                        {{ ss.get('status', 'Registered') }}
+                                    </span>
+                                </td>
+                                <td style="text-align: center;">{{ ss.get('doc_count', 0) }}</td>
                                 <td>
                                     {% if student.sessions %}
                                         {{ student.sessions[0].created_at.strftime('%d %b %Y') }}
                                     {% else %}
-                                        Never
+                                        &mdash;
                                     {% endif %}
                                 </td>
                                 <td class="actions-cell">
                                     <a href="{{ url_for('student_profile', student_id=student.id) }}" class="btn btn-small btn-secondary">View</a>
-                                    <a href="{{ url_for('interview', student_id=student.id) }}" class="btn btn-small btn-primary">New Interview</a>
+                                    <a href="{{ url_for('interview', student_id=student.id) }}" class="btn btn-small btn-primary">Interview</a>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -82,7 +95,117 @@
             </div>
         {% endif %}
     </section>
+
+    <!-- Document Tracker -->
+    <section class="recent-students-section" style="margin-top: 2rem;">
+        <h2 class="section-title">Document Tracker</h2>
+        {% if all_documents %}
+            <div class="table-wrapper">
+                <table class="data-table" id="docs-table">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Document</th>
+                            <th>Generated</th>
+                            <th>Status</th>
+                            <th>Shared</th>
+                            <th>Submitted</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in all_documents %}
+                            <tr id="doc-row-{{ doc.id }}">
+                                <td>
+                                    <a href="{{ url_for('student_profile', student_id=doc.student.id) }}">
+                                        {{ doc.student.first_name }} {{ doc.student.surname }}
+                                    </a>
+                                </td>
+                                <td>{{ doc.doc_type_name }}</td>
+                                <td>{{ doc.created_at.strftime('%d %b %Y') }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ doc.status }}" id="status-badge-{{ doc.id }}">
+                                        {{ doc.status_label }}
+                                    </span>
+                                </td>
+                                <td id="shared-{{ doc.id }}">{{ doc.shared_date.strftime('%d %b %Y') if doc.shared_date else '&mdash;' }}</td>
+                                <td id="submitted-{{ doc.id }}">
+                                    {% if doc.submitted_date %}
+                                        {{ doc.submitted_date.strftime('%d %b %Y') }}
+                                        {% if doc.submitted_to %}<br><small>to {{ doc.submitted_to }}</small>{% endif %}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                                <td class="actions-cell">
+                                    <select class="status-select" id="select-{{ doc.id }}" onchange="updateDocStatus({{ doc.id }})">
+                                        <option value="">Change...</option>
+                                        <option value="generated">Generated</option>
+                                        <option value="reviewed">Reviewed</option>
+                                        <option value="shared_with_student">Shared with Student</option>
+                                        <option value="submitted">Submitted</option>
+                                        <option value="archived">Archived</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <p>No documents generated yet. Run an interview and generate documents to see them here.</p>
+            </div>
+        {% endif %}
+    </section>
+
+    <!-- Submitted-to modal -->
+    <div id="submitted-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:white; padding:2rem; border-radius:8px; max-width:400px; width:90%; margin:auto; margin-top:15vh;">
+            <h3 style="margin-top:0; color:#1B4F72;">Submitted To</h3>
+            <p>Enter the employer name this document was submitted to:</p>
+            <input type="text" id="submitted-to-input" class="search-input" placeholder="e.g. Saigon Kitchen, Melbourne" style="margin-bottom:1rem;">
+            <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+                <button class="btn btn-small btn-secondary" onclick="closeSubmitModal(false)">Cancel</button>
+                <button class="btn btn-small btn-primary" onclick="closeSubmitModal(true)">Save</button>
+            </div>
+        </div>
+    </div>
 </div>
+
+<style>
+    .status-badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .status-registered { background: #eee; color: #666; }
+    .status-interview { background: #d4efdf; color: #1e8449; }
+    .status-generated, .status-generated { background: #d6eaf8; color: #1b4f72; }
+    .status-shared, .status-shared_with_student { background: #fdebd0; color: #e67e22; }
+    .status-submitted { background: #d5f5e3; color: #196f3d; }
+    .status-reviewed { background: #e8daef; color: #6c3483; }
+    .status-archived { background: #f2f3f4; color: #909497; }
+    .status-select {
+        padding: 0.3rem 0.4rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        background: white;
+        cursor: pointer;
+    }
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+    }
+    @media (max-width: 768px) {
+        .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
 
 {% endblock %}
 
@@ -111,7 +234,7 @@
                 const html = data.results.map(student => `
                     <a href="/students/${student.id}" class="search-result-item">
                         <div class="search-result-name">${student.name}</div>
-                        <div class="search-result-meta">${student.student_id} • ${student.language}</div>
+                        <div class="search-result-meta">${student.student_id} &bull; ${student.language} &bull; <em>${student.status}</em></div>
                     </a>
                 `).join('');
 
@@ -126,5 +249,77 @@
             searchResults.innerHTML = '';
         }
     });
+
+    // Document status update
+    let pendingDocId = null;
+
+    function updateDocStatus(docId) {
+        const sel = document.getElementById(`select-${docId}`);
+        const newStatus = sel.value;
+        if (!newStatus) return;
+
+        // If "submitted", ask for employer name
+        if (newStatus === 'submitted') {
+            pendingDocId = docId;
+            document.getElementById('submitted-modal').style.display = 'flex';
+            document.getElementById('submitted-to-input').value = '';
+            document.getElementById('submitted-to-input').focus();
+            sel.value = '';
+            return;
+        }
+
+        sendStatusUpdate(docId, newStatus, '');
+    }
+
+    function closeSubmitModal(confirmed) {
+        document.getElementById('submitted-modal').style.display = 'none';
+        if (confirmed && pendingDocId) {
+            const employer = document.getElementById('submitted-to-input').value.trim();
+            sendStatusUpdate(pendingDocId, 'submitted', employer);
+        }
+        pendingDocId = null;
+    }
+
+    function sendStatusUpdate(docId, status, submittedTo) {
+        const body = { status: status };
+        if (submittedTo) body.submitted_to = submittedTo;
+
+        fetch(`/api/documents/${docId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const doc = data.document;
+                // Update badge
+                const badge = document.getElementById(`status-badge-${docId}`);
+                badge.textContent = doc.status_label;
+                badge.className = `status-badge status-${doc.status}`;
+
+                // Update shared/submitted columns
+                const sharedCell = document.getElementById(`shared-${docId}`);
+                sharedCell.innerHTML = doc.shared_date
+                    ? new Date(doc.shared_date).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'})
+                    : '&mdash;';
+
+                const subCell = document.getElementById(`submitted-${docId}`);
+                if (doc.submitted_date) {
+                    let html = new Date(doc.submitted_date).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'});
+                    if (doc.submitted_to) html += `<br><small>to ${doc.submitted_to}</small>`;
+                    subCell.innerHTML = html;
+                } else {
+                    subCell.innerHTML = '&mdash;';
+                }
+
+                // Reset select
+                document.getElementById(`select-${docId}`).value = '';
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(err => alert('Failed to update: ' + err.message));
+    }
 </script>
 {% endblock %}

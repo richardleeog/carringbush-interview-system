@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 100" width="360" height="100">
+  <!-- Coloured dots column -->
+  <circle cx="18" cy="8" r="6" fill="#0077C8"/>
+  <circle cx="18" cy="22" r="6" fill="#E4002B"/>
+  <circle cx="18" cy="36" r="6" fill="#A51890"/>
+  <circle cx="18" cy="50" r="6" fill="#FF6900"/>
+  <circle cx="18" cy="64" r="6" fill="#FFB81C"/>
+  <circle cx="18" cy="78" r="6" fill="#78BE20"/>
+  <circle cx="18" cy="92" r="6" fill="#00A651"/>
+  <!-- Text -->
+  <text x="38" y="55" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="bold" fill="#2D2D2D">Carringbush</text>
+  <!-- Subtitle dot and text -->
+  <circle cx="42" cy="82" r="5" fill="#78BE20"/>
+  <text x="52" y="87" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#666666">Adult Education</text>
+</svg>

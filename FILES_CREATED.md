@@ -1,4 +1,4 @@
-# Multilingual Interview System - Files Created
+# Student Interaction Register - Files Created
 
 Complete list of all files created for the Flask application and templates.
 

@@ -1,5 +1,5 @@
 """
-Configuration for the Multilingual Interview System.
+Configuration for the Student Interaction Register.
 Edit these settings to match your environment.
 """
 import os

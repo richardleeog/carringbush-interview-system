@@ -1,4 +1,4 @@
-"""Integration tests for the Multilingual Interview System."""
+"""Integration tests for the Student Interaction Register."""
 
 import os
 import sys
@@ -75,7 +75,7 @@ def test_route(client, method, url, data=None, expected_status=200, label=""):
 
 def run_tests():
     print("\n" + "=" * 60)
-    print("INTEGRATION TESTS - Multilingual Interview System")
+    print("INTEGRATION TESTS - Student Interaction Register")
     print("=" * 60)
 
     setup()

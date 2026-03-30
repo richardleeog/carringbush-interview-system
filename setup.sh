@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Multilingual Interview System — One-Click Setup for macOS
+# Student Interaction Register — One-Click Setup for macOS
 # =============================================================================
 # Just run:   bash setup.sh
 # Everything is installed automatically. No questions asked.
@@ -11,7 +11,7 @@ set -e
 
 echo ""
 echo "=========================================="
-echo "  Multilingual Interview System"
+echo "  Student Interaction Register"
 echo "  Setting up — please wait..."
 echo "=========================================="
 echo ""

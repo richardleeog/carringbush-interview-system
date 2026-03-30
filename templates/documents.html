@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Generate Documents - {{ student.first_name }} {{ student.surname }} - Multilingual Interview System{% endblock %}
+{% block title %}Generate Documents - {{ student.first_name }} {{ student.surname }} - Student Interaction Register{% endblock %}
 
 {% block content %}
 <div class="documents-container">
@@ -278,25 +278,42 @@
         return names[docType] || docType;
     }
 
-    // Download single document as HTML file (opens in Word and browsers)
+    // Download single document as a printable PDF
     function downloadDocument(docType) {
-        const content = generatedDocuments[docType];
-        if (!content) return;
+        const btn = event ? event.target : null;
+        const origText = btn ? btn.textContent : '';
+        if (btn) { btn.textContent = 'Preparing...'; btn.disabled = true; }
 
-        const fullHtml = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${getDocumentName(docType)} - ${studentName}</title>
-<style>body{font-family:'Segoe UI',Arial,sans-serif;margin:2cm;color:#1a1a1a;line-height:1.5;}</style>
-</head><body>${content}</body></html>`;
-
-        const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${getDocumentName(docType).replace(/\s+/g, '_')}_${studentSid}.html`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        fetch(`/interview/${studentId}/download-pdf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                doc_type: docType,
+                session_id: sessionId,
+                job_title: document.getElementById('job-title') ? document.getElementById('job-title').value : '',
+                employer: document.getElementById('employer') ? document.getElementById('employer').value : ''
+            })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('PDF generation failed');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${getDocumentName(docType).replace(/\s+/g, '_')}_${studentSid}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        })
+        .catch(err => {
+            alert('Could not generate PDF: ' + err.message);
+        })
+        .finally(() => {
+            if (btn) { btn.textContent = origText; btn.disabled = false; }
+        });
     }
 
     // Download all documents as separate files

@@ -1,5 +1,5 @@
 """
-Database models for the Multilingual Interview System.
+Database models for the Student Interaction Register.
 Uses SQLite via Flask-SQLAlchemy.
 """
 from datetime import datetime, timezone
@@ -116,6 +116,69 @@ class InterviewSession(db.Model):
             "folder_name": self.folder_name,
             "has_transcript": bool(self.transcript_english),
             "documents_generated": self.documents_generated,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class DocumentRecord(db.Model):
+    """Tracks individual generated documents and their lifecycle status."""
+    __tablename__ = "document_records"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey("interview_sessions.id"), nullable=False)
+    doc_type = db.Column(db.String(50), nullable=False)  # cv, cover_letter, summary_internal, etc.
+    status = db.Column(db.String(30), default="generated")
+    # Statuses: generated, reviewed, shared_with_student, submitted, archived
+    shared_date = db.Column(db.Date, nullable=True)
+    submitted_date = db.Column(db.Date, nullable=True)
+    submitted_to = db.Column(db.String(200), nullable=True)  # employer name
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
+                           onupdate=lambda: datetime.now(timezone.utc))
+
+    student = db.relationship("Student", backref=db.backref("documents", lazy=True,
+                              order_by="DocumentRecord.created_at.desc()"))
+    session = db.relationship("InterviewSession", backref=db.backref("document_records", lazy=True))
+
+    DOC_TYPE_NAMES = {
+        "cv": "Curriculum Vitae",
+        "cover_letter": "Cover Letter",
+        "summary_internal": "Internal Summary",
+        "summary_student": "Student Summary",
+        "action_items": "Action Items",
+    }
+
+    STATUS_LABELS = {
+        "generated": "Generated",
+        "reviewed": "Reviewed",
+        "shared_with_student": "Shared with Student",
+        "submitted": "Submitted to Employer",
+        "archived": "Archived",
+    }
+
+    @property
+    def doc_type_name(self):
+        return self.DOC_TYPE_NAMES.get(self.doc_type, self.doc_type)
+
+    @property
+    def status_label(self):
+        return self.STATUS_LABELS.get(self.status, self.status)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "student_id": self.student_id,
+            "session_id": self.session_id,
+            "doc_type": self.doc_type,
+            "doc_type_name": self.doc_type_name,
+            "status": self.status,
+            "status_label": self.status_label,
+            "shared_date": self.shared_date.isoformat() if self.shared_date else None,
+            "submitted_date": self.submitted_date.isoformat() if self.submitted_date else None,
+            "submitted_to": self.submitted_to,
+            "notes": self.notes,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
